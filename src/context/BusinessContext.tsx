@@ -154,6 +154,7 @@ interface BusinessContextType {
 
   // Worker Actions
   addWorkerPayment: (paymentData: Omit<WorkerPayment, 'id' | 'createdTimestamp'>) => WorkerPayment;
+  deleteWorkerPayment: (id: string) => void;
   addWorker: (worker: Omit<Worker, 'id'>) => Worker;
   editWorker: (id: string, data: Partial<Worker>) => void;
 
@@ -1373,6 +1374,11 @@ export const BusinessProvider: React.FC<{ children: ReactNode }> = ({ children }
     return newWp;
   };
 
+  const deleteWorkerPayment = (id: string) => {
+    setWorkerPayments((prev) => prev.filter((wp) => wp.id !== id));
+    fsDeleteDoc(FS_COLLECTIONS.WORKER_PAYMENTS, id);
+  };
+
   const addWorker = (workerData: Omit<Worker, 'id'>): Worker => {
     const id = `worker-${Date.now()}`;
     const newWorker: Worker = { ...workerData, id };
@@ -1635,6 +1641,7 @@ export const BusinessProvider: React.FC<{ children: ReactNode }> = ({ children }
         addExpenseCategory,
 
         addWorkerPayment,
+        deleteWorkerPayment,
         addWorker,
         editWorker,
 
