@@ -23,6 +23,7 @@ import {
   DollarSign,
   AlertCircle,
   Pencil,
+  Layers,
 } from 'lucide-react';
 import { Lorry, LorryPaymentType, LorryTrip } from '../types';
 
@@ -30,6 +31,7 @@ interface RecallEntry {
   lorryId: string;
   lorryName: string;
   material: string;
+  quantity?: number;
   amount: number;
 }
 
@@ -64,11 +66,11 @@ export const LorryView: React.FC = () => {
   const [showCustomMaterialInput, setShowCustomMaterialInput] = useState<boolean>(false);
 
   // Quantity & Amount Calculation
-  // Default is 300 as specified by user!
+  // Quantity defaults to 300 Feet (අඩි). Amount is OPTIONAL (defaults to 0)!
+  const [quantity, setQuantity] = useState<number>(300);
+  const [amount, setAmount] = useState<number>(0);
   const [calcMode, setCalcMode] = useState<'default300' | 'unitRate'>('default300');
-  const [amount, setAmount] = useState<number>(300);
-  const [unitCount, setUnitCount] = useState<number>(3);
-  const [unitRate, setUnitRate] = useState<number>(100);
+  const [unitRate, setUnitRate] = useState<number>(1);
 
   // Payment Options
   const [selectedCustomerForCredit, setSelectedCustomerForCredit] = useState<string>('');
@@ -88,7 +90,8 @@ export const LorryView: React.FC = () => {
   const [editMaterial, setEditMaterial] = useState<string>('පස්');
   const [editCustomMaterial, setEditCustomMaterial] = useState<string>('');
   const [editPaymentType, setEditPaymentType] = useState<LorryPaymentType>('FULL');
-  const [editAmount, setEditAmount] = useState<number>(300);
+  const [editQuantity, setEditQuantity] = useState<number>(300);
+  const [editAmount, setEditAmount] = useState<number>(0);
   const [editDate, setEditDate] = useState<string>('');
   const [editTime, setEditTime] = useState<string>('');
   const [editCustomerId, setEditCustomerId] = useState<string>('');
@@ -109,6 +112,7 @@ export const LorryView: React.FC = () => {
       setEditCustomMaterial(mat);
     }
     setEditPaymentType(trip.paymentType);
+    setEditQuantity(trip.quantity || 300);
     setEditAmount(trip.paymentType === 'AIYA' ? 0 : trip.totalAmount);
     setEditDate(trip.date);
     setEditTime(trip.time);
@@ -133,6 +137,7 @@ export const LorryView: React.FC = () => {
       material: finalMaterial,
       tripType: finalMaterial,
       destination: finalMaterial,
+      quantity: Number(editQuantity) || 300,
       paymentType: editPaymentType,
       totalAmount: finalAmount,
       cashReceived: editPaymentType === 'FULL' ? finalAmount : 0,
@@ -165,12 +170,12 @@ export const LorryView: React.FC = () => {
     }
   });
 
-  // Keep amount updated when unit count or rate changes in unitRate mode
+  // Keep amount updated when quantity or unit rate changes in unitRate mode
   useEffect(() => {
     if (calcMode === 'unitRate') {
-      setAmount((unitCount || 0) * (unitRate || 0));
+      setAmount(Math.round((quantity || 0) * (unitRate || 0)));
     }
-  }, [calcMode, unitCount, unitRate]);
+  }, [calcMode, quantity, unitRate]);
 
   // Selected Lorry object
   const activeLorry = useMemo(() => {
@@ -231,10 +236,10 @@ export const LorryView: React.FC = () => {
     setSelectedMaterial('පස්');
     setCustomMaterial('');
     setShowCustomMaterialInput(false);
+    setQuantity(300);
     setCalcMode('default300');
-    setAmount(300);
-    setUnitCount(3);
-    setUnitRate(100);
+    setAmount(0);
+    setUnitRate(1);
     setSelectedCustomerForCredit('');
     setNewCustomerName('');
     setTripNotes('');
@@ -246,9 +251,10 @@ export const LorryView: React.FC = () => {
     if (!activeLorry) return;
 
     const finalMaterial = showCustomMaterialInput && customMaterial.trim() ? customMaterial.trim() : selectedMaterial;
-    // Aiyata mudal does NOT track any amount ("Aiyata mudal kiyana eka dunnama gana wadak na eke gana danna epa")
+    // Aiyata mudal does NOT track any amount. Amount is optional (defaults to 0 if not entered).
     const isAiya = paymentMode === 'AIYATA';
-    const finalAmount = isAiya ? 0 : (amount > 0 ? amount : 300);
+    const finalAmount = isAiya ? 0 : (Number(amount) > 0 ? Number(amount) : 0);
+    const finalQty = Number(quantity) > 0 ? Number(quantity) : 300;
 
     // Automatic Real-time Timestamp at the moment of adding!
     const now = new Date();
@@ -305,7 +311,7 @@ export const LorryView: React.FC = () => {
       time: currentTimeString,
       tripType: finalMaterial,
       material: finalMaterial,
-      quantity: isAiya ? 1 : (calcMode === 'unitRate' ? unitCount : finalAmount),
+      quantity: finalQty,
       unitPrice: isAiya ? 0 : (calcMode === 'unitRate' ? unitRate : undefined),
       calculationMode: calcMode === 'unitRate' ? 'unitPrice' : 'default300',
       destination: finalMaterial,
@@ -325,6 +331,7 @@ export const LorryView: React.FC = () => {
       lorryId: activeLorry.id,
       lorryName: activeLorry.name,
       material: finalMaterial,
+      quantity: finalQty,
       amount: isAiya ? 0 : finalAmount,
     };
     setLastRecall(recall);
@@ -335,7 +342,7 @@ export const LorryView: React.FC = () => {
     }
 
     // Trigger Success Toast
-    setSuccessToast(`✓ ${activeLorry.name} • ${finalMaterial} (Rs. ${finalAmount}) සුරැකිණි!`);
+    setSuccessToast(`✓ ${activeLorry.name} • ${finalMaterial} (${finalQty} අඩි${finalAmount > 0 ? ` • Rs. ${finalAmount}` : ''}) සුරැකිණි!`);
     setTimeout(() => setSuccessToast(null), 2500);
 
     // IMMEDIATELY RESET TO STEP 1 for ULTRA FAST next trip entry!
@@ -349,7 +356,8 @@ export const LorryView: React.FC = () => {
     if (l) {
       setSelectedLorryId(l.id);
       setSelectedMaterial(lastRecall.material);
-      setAmount(lastRecall.amount);
+      setQuantity(lastRecall.quantity || 300);
+      setAmount(lastRecall.amount || 0);
       setCalcMode('default300');
       // Jump directly to payment step!
       setCurrentStep(4);
@@ -435,7 +443,7 @@ export const LorryView: React.FC = () => {
             <div className="flex items-center gap-1.5 text-xs text-amber-300 font-medium truncate">
               <RotateCcw size={14} className="text-amber-400 shrink-0" />
               <span className="truncate">
-                <strong className="font-black text-amber-200">පෙර:</strong> {lastRecall.lorryName} • {lastRecall.material} • Rs. {lastRecall.amount}
+                <strong className="font-black text-amber-200">පෙර:</strong> {lastRecall.lorryName} • {lastRecall.material} • {lastRecall.quantity || 300} අඩි{lastRecall.amount > 0 ? ` • Rs. ${lastRecall.amount}` : ''}
               </span>
             </div>
             <button
@@ -770,137 +778,209 @@ export const LorryView: React.FC = () => {
               </div>
 
               <div>
-                <h2 className="text-sm font-black text-white">3. ප්‍රමාණය සහ මුදල (Quantity & Amount)</h2>
-                <p className="text-[11px] text-slate-400">Default ප්‍රමාණය 300 ක් වේ හෝ ඒකක ගණන × මිලෙන් දමන්න</p>
+                <h2 className="text-sm font-black text-white">3. ප්‍රමාණය, මුදල සහ සටහන (Quantity, Amount & Note)</h2>
+                <p className="text-[11px] text-slate-400">ප්‍රමාණය (Default 300 අඩි), මුදල (අවශ්‍ය නම් පමණක්) සහ සටහනක් ඇතුළත් කරන්න</p>
               </div>
 
-              {/* Mode Switcher Toggle */}
-              <div className="grid grid-cols-2 gap-1 bg-slate-900 p-1 rounded-2xl border border-slate-800 text-xs">
-                <button
-                  type="button"
-                  onClick={() => setCalcMode('default300')}
-                  className={`py-2 px-3 rounded-xl font-black transition ${
-                    calcMode === 'default300'
-                      ? 'bg-amber-500 text-slate-950 shadow-md'
-                      : 'text-slate-400 hover:text-white'
-                  }`}
-                >
-                  සාමාන්‍ය (Default: 300)
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setCalcMode('unitRate');
-                    setAmount((unitCount || 0) * (unitRate || 0));
-                  }}
-                  className={`py-2 px-3 rounded-xl font-black transition ${
-                    calcMode === 'unitRate'
-                      ? 'bg-amber-500 text-slate-950 shadow-md'
-                      : 'text-slate-400 hover:text-white'
-                  }`}
-                >
-                  ඒකක × මිල (Rate)
-                </button>
+              {/* 1. QUANTITY SELECTOR (IN FEET / අඩි - DEFAULT 300) */}
+              <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-3.5 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Layers size={16} className="text-amber-400" />
+                    <label htmlFor="input-quantity" className="text-xs font-bold text-amber-300">
+                      ප්‍රමාණය (Quantity in Feet / අඩි):
+                    </label>
+                  </div>
+                  <span className="px-2.5 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-400 text-xs font-black font-mono">
+                    {quantity} අඩි (Feet)
+                  </span>
+                </div>
+
+                {/* Stepper + Direct Quantity Input */}
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setQuantity((prev) => Math.max(25, prev - 25))}
+                    className="w-10 h-10 rounded-xl bg-slate-950 hover:bg-slate-800 text-amber-400 border border-slate-700 flex items-center justify-center text-sm font-black active:scale-95 transition shrink-0"
+                    title="25 අඩියක් අඩු කරන්න"
+                  >
+                    -25
+                  </button>
+                  <div className="relative flex-1">
+                    <input
+                      id="input-quantity"
+                      type="number"
+                      step="5"
+                      min="1"
+                      value={quantity || ''}
+                      onChange={(e) => setQuantity(Math.max(1, Number(e.target.value)))}
+                      className="w-full py-2 px-3 bg-slate-950 border-2 border-amber-400/80 rounded-xl text-xl font-black text-white text-center focus:outline-none focus:ring-2 focus:ring-amber-400 font-mono shadow-inner"
+                      placeholder="300"
+                    />
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-amber-400/70 pointer-events-none">
+                      අඩි
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setQuantity((prev) => prev + 25)}
+                    className="w-10 h-10 rounded-xl bg-slate-950 hover:bg-slate-800 text-amber-400 border border-slate-700 flex items-center justify-center text-sm font-black active:scale-95 transition shrink-0"
+                    title="25 අඩියක් වැඩි කරන්න"
+                  >
+                    +25
+                  </button>
+                </div>
+
+                {/* Quick Quantity Presets in Feet */}
+                <div>
+                  <span className="text-[10px] text-slate-400 font-semibold block mb-1.5 px-0.5">
+                    ඉක්මන් අඩි ප්‍රමාණ තේරීම (Quick Feet Presets):
+                  </span>
+                  <div className="grid grid-cols-4 sm:grid-cols-8 gap-1.5">
+                    {[150, 200, 250, 300, 350, 400, 450, 500].map((q) => (
+                      <button
+                        key={q}
+                        type="button"
+                        onClick={() => setQuantity(q)}
+                        className={`py-1.5 rounded-xl text-xs font-black transition border ${
+                          quantity === q
+                            ? 'bg-amber-500 text-slate-950 border-amber-400 shadow-md scale-[1.02]'
+                            : 'bg-slate-950 hover:bg-slate-800 text-slate-300 border-slate-800'
+                        }`}
+                      >
+                        {q} {q === 300 ? '★' : ''}
+                      </button>
+                    ))}
+                  </div>
+                </div>
               </div>
 
-              {/* MODE A: DIRECT AMOUNT INPUT + QUICK PRESETS */}
-              {calcMode === 'default300' && (
-                <div className="space-y-3">
-                  {/* DIRECT AMOUNT INPUT FIELD */}
-                  <div className="bg-slate-900 p-4 rounded-2xl border-2 border-amber-500/40 text-center space-y-2">
-                    <label htmlFor="input-lorry-custom-amount" className="text-xs font-bold text-amber-300 block">
-                      මුළු මුදල ඇතුළත් කරන්න (Enter Total Amount in Rs):
+              {/* 2. OPTIONAL AMOUNT ENTRY (කැමතිනම් පමණක්) */}
+              <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-3.5 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <DollarSign size={16} className="text-emerald-400" />
+                    <div>
+                      <span className="text-xs font-bold text-emerald-300 block leading-tight">
+                        ගාණ / මුදල (Amount in Rs):
+                      </span>
+                      <span className="text-[10px] text-slate-400 font-normal">
+                        * ඇතුළත් කිරීම අනිවාර්ය නැත (කැමතිනම් පමණක්)
+                      </span>
+                    </div>
+                  </div>
+                  <span className={`text-xs font-black font-mono px-2 py-0.5 rounded-md ${
+                    amount > 0
+                      ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40'
+                      : 'bg-slate-800 text-slate-400 border border-slate-700'
+                  }`}>
+                    {amount > 0 ? `Rs. ${amount}` : 'මුදලක් නැත (රු. 0)'}
+                  </span>
+                </div>
+
+                {/* Direct Total Input */}
+                <div className="space-y-2.5">
+                  <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 text-center space-y-1">
+                    <label htmlFor="input-lorry-custom-amount" className="text-[11px] font-bold text-slate-300 block">
+                      මුදලක් තිබේ නම් ඇතුළත් කරන්න (Enter Amount if any):
                     </label>
                     <div className="flex items-center justify-center gap-2 max-w-xs mx-auto">
-                      <span className="text-xl font-black text-amber-400 font-mono">Rs.</span>
+                      <span className="text-xl font-black text-emerald-400 font-mono">Rs.</span>
                       <input
                         id="input-lorry-custom-amount"
                         type="number"
                         min="0"
                         step="50"
-                        value={amount || ''}
-                        onChange={(e) => setAmount(Number(e.target.value))}
-                        className="w-full px-4 py-2.5 bg-slate-950 border-2 border-amber-400 rounded-2xl text-2xl font-black text-white focus:outline-none focus:ring-2 focus:ring-amber-400 font-mono text-center shadow-inner"
-                        placeholder="300"
-                        autoFocus
+                        value={amount === 0 ? '' : amount}
+                        onChange={(e) => setAmount(Number(e.target.value) || 0)}
+                        className="w-full px-4 py-2 bg-slate-900 border-2 border-slate-700 focus:border-emerald-400 rounded-xl text-2xl font-black text-white focus:outline-none focus:ring-2 focus:ring-emerald-400 font-mono text-center shadow-inner"
+                        placeholder="0 (කැමතිනම් පමණක්)"
                       />
                     </div>
-                    <span className="text-[11px] text-slate-400 block">
-                      ඔබට අවශ්‍ය ඕනෑම මුදලක් මෙහි කෙළින්ම ටයිප් කරන්න
-                    </span>
                   </div>
 
-                  {/* Preset Amount Pills */}
+                  {/* Preset Amount Pills + Clear / 0 Button */}
                   <div>
-                    <span className="text-[11px] text-slate-400 font-bold block mb-1.5 px-1">
-                      ඉක්මන් මුදල් ප්‍රමාණ (Quick Presets):
+                    <span className="text-[10px] text-slate-400 font-semibold block mb-1.5 px-0.5">
+                      ඉක්මන් මුදල් ප්‍රමාණ (Quick Amount Presets):
                     </span>
                     <div className="grid grid-cols-4 gap-1.5">
-                      {[300, 250, 350, 500, 1000, 1500, 2000, 3000].map((preset) => (
+                      <button
+                        type="button"
+                        onClick={() => setAmount(0)}
+                        className={`py-1.5 px-2 rounded-xl text-xs font-black transition border ${
+                          amount === 0
+                            ? 'bg-slate-800 text-amber-300 border-amber-500/50 shadow'
+                            : 'bg-slate-950 hover:bg-slate-850 text-slate-400 border-slate-800'
+                        }`}
+                      >
+                        මුදලක් නැත (0)
+                      </button>
+                      {[250, 300, 500, 1000, 1500, 2000, 3000].map((preset) => (
                         <button
                           key={preset}
                           type="button"
                           onClick={() => handleSelectPresetAmount(preset)}
-                          className={`py-2 px-2 rounded-xl text-xs font-black transition border ${
+                          className={`py-1.5 px-2 rounded-xl text-xs font-black transition border ${
                             amount === preset
-                              ? 'bg-amber-500 text-slate-950 border-amber-400 shadow-md scale-[1.02]'
-                              : 'bg-slate-900 hover:bg-slate-800 text-slate-300 border-slate-800'
+                              ? 'bg-emerald-500 text-slate-950 border-emerald-400 shadow-md scale-[1.02]'
+                              : 'bg-slate-950 hover:bg-slate-800 text-slate-300 border-slate-800'
                           }`}
                         >
-                          {preset} {preset === 300 ? '★' : ''}
+                          Rs. {preset}
                         </button>
                       ))}
                     </div>
                   </div>
-
-                  <p className="text-[11px] text-slate-500 italic px-1">
-                    * සටහන: සම්පූර්ණ මුදල හෝ ණයට ලබාදීමේදී මෙම මුදල සටහන් වේ. (අයියාට මුදල් තෝරන්නේ නම් මුදලක් අවශ්‍ය නොවේ)
-                  </p>
                 </div>
-              )}
+              </div>
 
-              {/* MODE B: UNIT COUNT × UNIT PRICE */}
-              {calcMode === 'unitRate' && (
-                <div className="space-y-3 bg-slate-900 p-4 rounded-2xl border border-slate-800">
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="text-xs font-bold text-slate-300 block mb-1">
-                        ඒකක ගණන (Units/Cubes):
-                      </label>
-                      <input
-                        type="number"
-                        step="any"
-                        value={unitCount || ''}
-                        onChange={(e) => setUnitCount(Number(e.target.value))}
-                        className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-sm font-black text-white focus:outline-none focus:border-amber-500 font-mono text-center"
-                        placeholder="3"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-xs font-bold text-slate-300 block mb-1">
-                        ඒකකයක මිල (Rs):
-                      </label>
-                      <input
-                        type="number"
-                        value={unitRate || ''}
-                        onChange={(e) => setUnitRate(Number(e.target.value))}
-                        className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-sm font-black text-white focus:outline-none focus:border-amber-500 font-mono text-center"
-                        placeholder="100"
-                      />
-                    </div>
+              {/* 3. OPTIONAL TRIP NOTE (ට්‍රිප් එකට සටහනක්) */}
+              <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-3.5 space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <FileText size={16} className="text-amber-400" />
+                    <label htmlFor="input-trip-note" className="text-xs font-bold text-amber-300">
+                      ට්‍රිප් එකට සටහනක් (Note - අවශ්‍ය නම් පමණක්):
+                    </label>
                   </div>
+                  <span className="text-[10px] text-slate-400 bg-slate-800 px-2 py-0.5 rounded font-mono">
+                    Optional
+                  </span>
+                </div>
+                <input
+                  id="input-trip-note"
+                  type="text"
+                  value={tripNotes}
+                  onChange={(e) => setTripNotes(e.target.value)}
+                  placeholder="උදා: කඩවත සයිට් එකට, බාස් උන්නැහේට, පස් ලෝඩ් 1යි, ආදිය..."
+                  className="w-full px-3.5 py-2 bg-slate-950 border border-slate-700 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-amber-400"
+                />
+              </div>
 
-                  {/* Computed Total Strip */}
-                  <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 text-center">
-                    <span className="text-[11px] text-slate-400 block">
-                      ගණනය කළ මුළු මුදල ({unitCount} × Rs. {unitRate}):
+              {/* 4. TRIP OVERVIEW STRIP */}
+              <div className="bg-slate-950 p-3.5 rounded-2xl border border-slate-800 space-y-1 text-xs">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <span className="text-slate-400 block text-[10px]">සාරාංශය (Overview):</span>
+                    <span className="text-white font-black">
+                      {selectedMaterial} • ප්‍රමාණය: <span className="text-amber-400 font-mono">{quantity} අඩි</span>
                     </span>
-                    <span className="text-2xl font-black text-amber-400 font-mono">
-                      Rs. {amount}
+                  </div>
+                  <div className="text-right">
+                    <span className="text-slate-400 block text-[10px]">නියමිත මුදල:</span>
+                    <span className={`font-black font-mono text-sm ${amount > 0 ? 'text-emerald-400' : 'text-slate-400'}`}>
+                      {amount > 0 ? `Rs. ${amount}` : 'මුදලක් නැත (රු. 0)'}
                     </span>
                   </div>
                 </div>
-              )}
+                {tripNotes.trim() && (
+                  <div className="pt-1.5 border-t border-slate-900 flex items-center gap-1.5 text-amber-300/90 text-[11px]">
+                    <FileText size={12} className="text-amber-400 shrink-0" />
+                    <span className="truncate"><strong>Note:</strong> {tripNotes.trim()}</span>
+                  </div>
+                )}
+              </div>
 
               {/* Advance to Step 4 Button */}
               <button
@@ -908,7 +988,7 @@ export const LorryView: React.FC = () => {
                 onClick={() => setCurrentStep(4)}
                 className="w-full py-3.5 bg-amber-500 hover:bg-amber-400 text-slate-950 rounded-2xl text-sm font-black flex items-center justify-center gap-2 shadow-lg active:scale-98 transition"
               >
-                <span>මුදල් ගෙවීමට යන්න (Next to Payment)</span>
+                <span>මුදල් ගෙවීම / තහවුරු කිරීමට යන්න (Next)</span>
                 <ArrowRight size={16} />
               </button>
             </div>
@@ -926,9 +1006,14 @@ export const LorryView: React.FC = () => {
                     <Truck size={17} className="text-amber-400" />
                     <span className="font-black text-white text-sm">{activeLorry?.name}</span>
                   </div>
-                  <span className="px-2.5 py-0.5 rounded-md bg-amber-500/10 text-amber-400 text-xs font-black border border-amber-500/30">
-                    {selectedMaterial}
-                  </span>
+                  <div className="flex items-center gap-1.5">
+                    <span className="px-2.5 py-0.5 rounded-md bg-amber-500/10 text-amber-400 text-xs font-black border border-amber-500/30">
+                      {selectedMaterial}
+                    </span>
+                    <span className="px-2 py-0.5 rounded-md bg-slate-800 text-amber-300 text-xs font-bold border border-slate-700 font-mono">
+                      {quantity} අඩි
+                    </span>
+                  </div>
                 </div>
 
                 <div className="flex items-center justify-between pt-1">
@@ -938,28 +1023,37 @@ export const LorryView: React.FC = () => {
                   </div>
                   <div className="text-right">
                     <span className="text-[11px] text-slate-400 block leading-tight">මුළු මුදල:</span>
-                    <span className="text-xl font-black text-amber-400 font-mono">
-                      Rs. {amount}
+                    <span className={`text-lg font-black font-mono ${amount > 0 ? 'text-emerald-400' : 'text-slate-400'}`}>
+                      {amount > 0 ? `Rs. ${amount}` : 'රු. 0 (නැත)'}
                     </span>
                   </div>
                 </div>
+
+                {tripNotes.trim() && (
+                  <div className="bg-slate-950/70 p-2 rounded-xl border border-slate-800/80 flex items-start gap-1.5 text-[11px] text-amber-200">
+                    <FileText size={13} className="text-amber-400 mt-0.5 shrink-0" />
+                    <span><strong>Note:</strong> {tripNotes.trim()}</span>
+                  </div>
+                )}
               </div>
 
               <div>
-                <h2 className="text-sm font-black text-white">4. මුදල් ගෙවීම (Select Payment Option)</h2>
+                <h2 className="text-sm font-black text-white">4. මුදල් ගෙවීම / තහවුරු කිරීම (Select Payment Option)</h2>
                 <p className="text-[11px] text-slate-400">
-                  දවසේ අවසානයට මුදල් පෙට්ටියට එකතු වන්නේ සම්පූර්ණ මුදල පමණි
+                  {amount > 0
+                    ? 'මුදල් ලැබුණි නම් "සම්පූර්ණ මුදල" මත Click කරන්න. මුදල් නැතිනම් අයියාට හෝ ණයට තෝරන්න.'
+                    : 'මුදලක් ඇතුළත් කර නැත (රු. 0). ට්‍රිප් එක සටහන් කිරීමට පහතින් තෝරන්න.'}
                 </p>
               </div>
 
-              {/* DIRECT AMOUNT QUICK ADJUSTER RIGHT IN STEP 4 */}
-              <div className="bg-slate-900 border border-slate-800 rounded-2xl p-3 space-y-2">
+              {/* DIRECT AMOUNT QUICK ADJUSTER & NOTE IN STEP 4 */}
+              <div className="bg-slate-900 border border-slate-800 rounded-2xl p-3 space-y-2.5">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-bold text-slate-300">
-                    මුළු මුදල (Amount to Charge):
+                    මුදල (Amount in Rs - Optional):
                   </span>
-                  <span className="text-base font-black text-amber-400 font-mono">
-                    Rs. {amount || 300}
+                  <span className="text-xs font-mono font-bold text-emerald-400">
+                    {amount > 0 ? `Rs. ${amount}` : 'රු. 0 (නැත)'}
                   </span>
                 </div>
                 <div className="flex items-center gap-2">
@@ -967,13 +1061,24 @@ export const LorryView: React.FC = () => {
                     <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-500 font-mono">Rs.</span>
                     <input
                       type="number"
-                      value={amount || ''}
-                      onChange={(e) => setAmount(Number(e.target.value))}
-                      placeholder="300"
-                      className="w-full pl-9 pr-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-sm font-black text-white focus:outline-none focus:border-amber-400 font-mono"
+                      value={amount === 0 ? '' : amount}
+                      onChange={(e) => setAmount(Number(e.target.value) || 0)}
+                      placeholder="0 (මුදලක් නැත)"
+                      className="w-full pl-9 pr-3 py-1.5 bg-slate-950 border border-slate-700 rounded-xl text-sm font-black text-white focus:outline-none focus:border-emerald-400 font-mono"
                     />
                   </div>
                   <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => setAmount(0)}
+                      className={`px-2 py-1.5 rounded-lg text-xs font-bold transition border ${
+                        amount === 0
+                          ? 'bg-slate-800 text-amber-300 border-amber-500/50'
+                          : 'bg-slate-950 text-slate-400 border-slate-800 hover:text-white'
+                      }`}
+                    >
+                      රු. 0
+                    </button>
                     {[300, 500, 1000, 1500].map((p) => (
                       <button
                         key={p}
@@ -990,14 +1095,25 @@ export const LorryView: React.FC = () => {
                     ))}
                   </div>
                 </div>
-                <p className="text-[10px] text-slate-500">
-                  * සම්පූර්ණ මුදල හෝ ණයට ලබාදීමේදී මෙම මුදල සටහන් වේ. අයියාට මුදල් සඳහා මුදලක් අවශ්‍ය නැත.
-                </p>
+
+                {/* Quick Trip Note input right here if user wants to add/edit note */}
+                <div className="pt-1 border-t border-slate-800/80">
+                  <div className="flex items-center gap-1.5">
+                    <FileText size={13} className="text-amber-400 shrink-0" />
+                    <input
+                      type="text"
+                      value={tripNotes}
+                      onChange={(e) => setTripNotes(e.target.value)}
+                      placeholder="ට්‍රිප් එකට සටහනක් (Note - අවශ්‍ය නම් ලියන්න)..."
+                      className="w-full px-2.5 py-1.5 bg-slate-950 border border-slate-800 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-amber-400"
+                    />
+                  </div>
+                </div>
               </div>
 
               {/* 3 HIGH CONTRAST PAYMENT BUTTONS */}
               <div className="space-y-2.5">
-                {/* 1. SAMPURNA MUDALA (FULL CASH TO BUSINESS) */}
+                {/* 1. SAMPURNA MUDALA / RECORD TRIP */}
                 <button
                   type="button"
                   id="btn-pay-sampurna"
@@ -1010,15 +1126,19 @@ export const LorryView: React.FC = () => {
                     </div>
                     <div>
                       <span className="text-base font-black block leading-tight">
-                        සම්පූර්ණ මුදල (Full Cash)
+                        {amount > 0 ? 'සම්පූර්ණ මුදල (Full Cash)' : 'ට්‍රිප් එක සටහන් කරන්න (Record Trip)'}
                       </span>
                       <span className="text-xs text-emerald-100 font-medium block">
-                        මුදල් ලැබුණි: Rs. {amount || 300} • මුදල් පෙට්ටියට එකතු වේ
+                        {amount > 0
+                          ? `මුදල් ලැබුණි: Rs. ${amount} • මුදල් පෙට්ටියට එකතු වේ`
+                          : `මුදලක් නැත (රු. 0) • ට්‍රිප් එක සහ ප්‍රමාණය (${quantity} අඩි) සටහන් වේ`}
                       </span>
                     </div>
                   </div>
                   <div className="text-right shrink-0">
-                    <span className="block text-base font-black font-mono">Rs. {amount || 300}</span>
+                    <span className="block text-base font-black font-mono">
+                      {amount > 0 ? `Rs. ${amount}` : 'රු. 0'}
+                    </span>
                     <span className="text-[10px] text-emerald-200">සුරකින්න →</span>
                   </div>
                 </button>
@@ -1059,9 +1179,16 @@ export const LorryView: React.FC = () => {
                         <span className="text-sm font-black text-rose-400 block leading-tight">
                           ණයට (Naya / Credit)
                         </span>
-                        <span className="text-[11px] text-slate-400">ණය පොතට (Customer Balance) එකතු වේ</span>
+                        <span className="text-[11px] text-slate-400">
+                          {amount > 0 ? `ණය: Rs. ${amount} • ණය පොතට එකතු වේ` : 'මුදලක් නැත (රු. 0)'}
+                        </span>
                       </div>
                     </div>
+                    {amount > 0 && (
+                      <span className="text-xs font-black font-mono text-rose-400">
+                        Rs. {amount}
+                      </span>
+                    )}
                   </div>
 
                   {/* Customer Select or Type */}
@@ -1262,17 +1389,28 @@ export const LorryView: React.FC = () => {
                 >
                   <div className="flex items-start justify-between">
                     <div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <span className="font-black text-sm text-white">{trip.lorryName}</span>
                         <span className="text-xs font-bold px-2 py-0.5 rounded-md bg-amber-500/10 text-amber-400 border border-amber-500/30">
                           {trip.material || trip.tripType}
                         </span>
+                        {trip.quantity ? (
+                          <span className="text-xs font-bold px-2 py-0.5 rounded-md bg-slate-800 text-amber-300 border border-slate-700 font-mono">
+                            ප්‍රමාණය: {trip.quantity} අඩි
+                          </span>
+                        ) : null}
                       </div>
                       <span className="text-[11px] text-slate-500 flex items-center gap-1 mt-0.5">
                         <Clock size={11} />
                         {trip.time}
                         {trip.customerName && ` • Customer: ${trip.customerName}`}
                       </span>
+                      {trip.notes && (
+                        <div className="mt-1 bg-slate-950/80 rounded-lg px-2 py-1 border border-slate-800 flex items-start gap-1.5 text-[11px] text-amber-200">
+                          <FileText size={12} className="text-amber-400 mt-0.5 shrink-0" />
+                          <span><strong className="text-slate-400 font-medium">Note:</strong> {trip.notes}</span>
+                        </div>
+                      )}
                     </div>
 
                     <div className="text-right">
@@ -1445,6 +1583,66 @@ export const LorryView: React.FC = () => {
                     className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white focus:outline-none focus:border-amber-500"
                   />
                 )}
+              </div>
+
+              {/* Quantity Selector for Edit Modal */}
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-xs font-bold text-slate-300">
+                    ප්‍රමාණය (Quantity in Feet / අඩි):
+                  </label>
+                  <span className="text-xs font-black text-amber-400 font-mono">
+                    {editQuantity} අඩි (Feet)
+                  </span>
+                </div>
+                <div className="flex items-center gap-2 mb-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setEditQuantity((prev) => Math.max(25, prev - 25))}
+                    className="w-8 h-8 rounded-lg bg-slate-900 hover:bg-slate-800 text-amber-400 border border-slate-700 flex items-center justify-center text-xs font-black active:scale-95 transition shrink-0"
+                    title="25 අඩියක් අඩු කරන්න"
+                  >
+                    -25
+                  </button>
+                  <div className="relative flex-1">
+                    <input
+                      type="number"
+                      step="5"
+                      min="1"
+                      value={editQuantity || ''}
+                      onChange={(e) => setEditQuantity(Math.max(1, Number(e.target.value)))}
+                      className="w-full px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-xl text-sm font-bold text-white focus:outline-none focus:border-amber-500 font-mono text-center"
+                      placeholder="300"
+                    />
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-amber-400/70 pointer-events-none">
+                      අඩි
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setEditQuantity((prev) => prev + 25)}
+                    className="w-8 h-8 rounded-lg bg-slate-900 hover:bg-slate-800 text-amber-400 border border-slate-700 flex items-center justify-center text-xs font-black active:scale-95 transition shrink-0"
+                    title="25 අඩියක් වැඩි කරන්න"
+                  >
+                    +25
+                  </button>
+                </div>
+                <div className="grid grid-cols-6 gap-1">
+                  {[150, 200, 250, 300, 350, 400].map((q) => (
+                    <button
+                      key={q}
+                      type="button"
+                      onClick={() => setEditQuantity(q)}
+                      className={`py-1 rounded-lg text-xs font-bold transition border ${
+                        editQuantity === q
+                          ? 'bg-amber-500 text-slate-950 border-amber-400 font-black'
+                          : 'bg-slate-900 text-slate-400 border-slate-800 hover:bg-slate-800'
+                      }`}
+                    >
+                      {q}
+                    </button>
+                  ))}
+                </div>
               </div>
 
               {/* Payment Type Selection */}
