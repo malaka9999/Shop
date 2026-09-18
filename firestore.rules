@@ -1,0 +1,70 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Helper function to check if user is authenticated
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    match /lorries/{lorryId} {
+      allow read, write: if isAuthenticated();
+    }
+
+    match /lorry_trips/{tripId} {
+      allow read, write: if isAuthenticated();
+    }
+
+    match /products/{productId} {
+      allow read, write: if isAuthenticated();
+    }
+
+    match /shop_sales/{saleId} {
+      allow read, write: if isAuthenticated();
+    }
+
+    match /customers/{customerId} {
+      allow read, write: if isAuthenticated();
+    }
+
+    match /customer_transactions/{txId} {
+      allow read, write: if isAuthenticated();
+    }
+
+    match /credit_transactions/{txId} {
+      allow read, write: if isAuthenticated();
+    }
+
+    match /expenses/{expenseId} {
+      allow read, write: if isAuthenticated();
+    }
+
+    match /workers/{workerId} {
+      allow read, write: if isAuthenticated();
+    }
+
+    match /worker_payments/{paymentId} {
+      allow read, write: if isAuthenticated();
+    }
+
+    match /cash_days/{dayId} {
+      allow read, write: if isAuthenticated();
+    }
+
+    match /daily_cash_records/{dayId} {
+      allow read, write: if isAuthenticated();
+    }
+
+    match /cash_transfers/{transferId} {
+      allow read, write: if isAuthenticated();
+    }
+
+    match /business_settings/{settingId} {
+      allow read, write: if isAuthenticated();
+    }
+
+    // Default test connection doc
+    match /test/{testDoc} {
+      allow read, write: if true;
+    }
+  }
+}

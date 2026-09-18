@@ -1,0 +1,219 @@
+{
+  "entities": {
+    "Lorry": {
+      "title": "Lorry",
+      "description": "Transport lorry entity",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "numberPlate": { "type": "string" },
+        "type": { "type": "string" },
+        "capacity": { "type": "string" },
+        "driverName": { "type": "string" },
+        "status": { "type": "string" },
+        "notes": { "type": "string" }
+      },
+      "required": ["id", "name", "numberPlate"]
+    },
+    "LorryTrip": {
+      "title": "LorryTrip",
+      "description": "Daily delivery or transport trip log",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "lorryId": { "type": "string" },
+        "lorryName": { "type": "string" },
+        "date": { "type": "string" },
+        "time": { "type": "string" },
+        "customerName": { "type": "string" },
+        "location": { "type": "string" },
+        "material": { "type": "string" },
+        "income": { "type": "number" },
+        "driverWage": { "type": "number" },
+        "paymentType": { "type": "string" },
+        "isPaid": { "type": "boolean" },
+        "notes": { "type": "string" }
+      },
+      "required": ["id", "lorryId", "date", "income"]
+    },
+    "Product": {
+      "title": "Product",
+      "description": "Fuel, oil, or shop product item",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "nameSi": { "type": "string" },
+        "category": { "type": "string" },
+        "unit": { "type": "string" },
+        "unitPrice": { "type": "number" }
+      },
+      "required": ["id", "name", "category", "unit", "unitPrice"]
+    },
+    "ShopSale": {
+      "title": "ShopSale",
+      "description": "Sale made at the fuel or parts shop",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "date": { "type": "string" },
+        "time": { "type": "string" },
+        "customerName": { "type": "string" },
+        "paymentType": { "type": "string" },
+        "totalAmount": { "type": "number" },
+        "isPaid": { "type": "boolean" }
+      },
+      "required": ["id", "date", "paymentType", "totalAmount"]
+    },
+    "Customer": {
+      "title": "Customer",
+      "description": "Customer record with credit/naya balance",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "phone": { "type": "string" },
+        "currentBalance": { "type": "number" }
+      },
+      "required": ["id", "name"]
+    },
+    "CustomerTransaction": {
+      "title": "CustomerTransaction",
+      "description": "Credit entry or payment received from customer",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "customerId": { "type": "string" },
+        "date": { "type": "string" },
+        "type": { "type": "string" },
+        "amount": { "type": "number" },
+        "balanceAfter": { "type": "number" }
+      },
+      "required": ["id", "customerId", "date", "type", "amount"]
+    },
+    "Expense": {
+      "title": "Expense",
+      "description": "Daily operational or maintenance expense",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "date": { "type": "string" },
+        "category": { "type": "string" },
+        "amount": { "type": "number" },
+        "description": { "type": "string" }
+      },
+      "required": ["id", "date", "category", "amount"]
+    },
+    "Worker": {
+      "title": "Worker",
+      "description": "Staff or driver profile and wage tracking",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "role": { "type": "string" },
+        "currentBalance": { "type": "number" }
+      },
+      "required": ["id", "name", "role"]
+    },
+    "WorkerPayment": {
+      "title": "WorkerPayment",
+      "description": "Trip wage or cash advance transaction for a worker",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "workerId": { "type": "string" },
+        "date": { "type": "string" },
+        "type": { "type": "string" },
+        "amount": { "type": "number" }
+      },
+      "required": ["id", "workerId", "date", "type", "amount"]
+    },
+    "CashDay": {
+      "title": "CashDay",
+      "description": "Daily cash opening, inflows, outflows, and closing balances",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "date": { "type": "string" },
+        "openingCash": { "type": "number" },
+        "expectedClosingCash": { "type": "number" }
+      },
+      "required": ["id", "date"]
+    },
+    "CashTransfer": {
+      "title": "CashTransfer",
+      "description": "Cash movement to bank, safe, or owner",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "date": { "type": "string" },
+        "amount": { "type": "number" },
+        "fromAccount": { "type": "string" },
+        "toAccount": { "type": "string" }
+      },
+      "required": ["id", "date", "amount", "fromAccount", "toAccount"]
+    },
+    "BusinessSetting": {
+      "title": "BusinessSetting",
+      "description": "Application settings and business metadata",
+      "type": "object",
+      "properties": {
+        "businessName": { "type": "string" },
+        "phone": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      }
+    }
+  },
+  "firestore": {
+    "/lorries/{lorryId}": {
+      "schema": "Lorry",
+      "description": "Vehicles fleet registered in the business"
+    },
+    "/lorry_trips/{tripId}": {
+      "schema": "LorryTrip",
+      "description": "Lorry trip logbook entries"
+    },
+    "/products/{productId}": {
+      "schema": "Product",
+      "description": "Fuel, oil, and parts inventory items and pricing"
+    },
+    "/shop_sales/{saleId}": {
+      "schema": "ShopSale",
+      "description": "Fuel and shop sales history"
+    },
+    "/customers/{customerId}": {
+      "schema": "Customer",
+      "description": "Customer naya ledger accounts"
+    },
+    "/customer_transactions/{txId}": {
+      "schema": "CustomerTransaction",
+      "description": "Customer credit transactions and repayments"
+    },
+    "/expenses/{expenseId}": {
+      "schema": "Expense",
+      "description": "Business expense entries"
+    },
+    "/workers/{workerId}": {
+      "schema": "Worker",
+      "description": "Drivers and employees"
+    },
+    "/worker_payments/{paymentId}": {
+      "schema": "WorkerPayment",
+      "description": "Trip wages and cash advances for workers"
+    },
+    "/cash_days/{dayId}": {
+      "schema": "CashDay",
+      "description": "Daily cash reconciliation records"
+    },
+    "/cash_transfers/{transferId}": {
+      "schema": "CashTransfer",
+      "description": "Cash transfer records"
+    },
+    "/business_settings/{settingId}": {
+      "schema": "BusinessSetting",
+      "description": "General business settings"
+    }
+  }
+}
