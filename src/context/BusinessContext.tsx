@@ -264,7 +264,14 @@ export const BusinessProvider: React.FC<{ children: ReactNode }> = ({ children }
     if (!saved) return [];
     try {
       const parsed: LorryTrip[] = JSON.parse(saved);
-      return parsed.filter((t) => !t.id.includes('seed'));
+      return parsed
+        .filter((t) => !t.id.includes('seed'))
+        .map((t) => {
+          if (t.paymentType === 'AIYA') {
+            return { ...t, totalAmount: 0, driverPayment: 0, cashReceived: 0, creditAmount: 0 };
+          }
+          return t;
+        });
     } catch {
       return [];
     }
@@ -501,7 +508,16 @@ export const BusinessProvider: React.FC<{ children: ReactNode }> = ({ children }
         // Trips
         unsubTrips = fsSubscribeCollection<LorryTrip>(FS_COLLECTIONS.LORRY_TRIPS, (data) => {
           if (data) {
-            const clean = data.filter((t) => !t.id.includes('seed'));
+            const clean = data
+              .filter((t) => !t.id.includes('seed'))
+              .map((t) => {
+                if (t.paymentType === 'AIYA' && (t.totalAmount > 0 || t.driverPayment > 0 || t.cashReceived > 0 || t.creditAmount > 0)) {
+                  const sanitized = { ...t, totalAmount: 0, driverPayment: 0, cashReceived: 0, creditAmount: 0 };
+                  fsSaveDoc(FS_COLLECTIONS.LORRY_TRIPS, t.id, sanitized);
+                  return sanitized;
+                }
+                return t;
+              });
             setLorryTrips(clean);
           }
         });
@@ -826,34 +842,24 @@ export const BusinessProvider: React.FC<{ children: ReactNode }> = ({ children }
   // Actions: LORRY TRIPS
   const addLorryTrip = (tripData: Omit<LorryTrip, 'id' | 'createdTimestamp'>): LorryTrip => {
     const id = `trip-${Date.now()}`;
+    const isAiya = tripData.paymentType === 'AIYA';
+    const totalAmount = isAiya ? 0 : (tripData.totalAmount || 0);
+    const driverPayment = 0; // Aiyata mudal doesn't have a driver wage amount (gana wadak na)
+    const cashReceived = tripData.paymentType === 'FULL' ? totalAmount : 0;
+    const creditAmount = tripData.paymentType === 'CREDIT' ? totalAmount : 0;
+
     const newTrip: LorryTrip = {
       ...tripData,
+      totalAmount,
+      driverPayment,
+      cashReceived,
+      creditAmount,
       id,
       createdTimestamp: Date.now(),
     };
 
     setLorryTrips((prev) => [newTrip, ...prev]);
     fsSaveDoc(FS_COLLECTIONS.LORRY_TRIPS, newTrip.id, newTrip);
-
-    // If driver payment exists, automatically record worker payment
-    if (newTrip.driverPayment > 0 && newTrip.driverName) {
-      const wpId = `wp-${Date.now()}`;
-      const wp: WorkerPayment = {
-        id: wpId,
-        date: newTrip.date,
-        time: newTrip.time,
-        workerId: newTrip.driverWorkerId || 'unknown',
-        workerName: newTrip.driverName,
-        amount: newTrip.driverPayment,
-        type: 'LORRY_TRIP',
-        lorryTripId: id,
-        lorryName: newTrip.lorryName,
-        note: `Trip payment: ${newTrip.destination || newTrip.tripType}`,
-        createdTimestamp: Date.now(),
-      };
-      setWorkerPayments((prev) => [wp, ...prev]);
-      fsSaveDoc(FS_COLLECTIONS.WORKER_PAYMENTS, wp.id, wp);
-    }
 
     // If credit exists and customer selected, add credit transaction and update customer balance
     if (newTrip.creditAmount > 0 && newTrip.customerId) {
@@ -899,10 +905,100 @@ export const BusinessProvider: React.FC<{ children: ReactNode }> = ({ children }
   };
 
   const editLorryTrip = (id: string, tripData: Partial<LorryTrip>) => {
-    setLorryTrips((prev) =>
-      prev.map((t) => (t.id === id ? { ...t, ...tripData } : t))
-    );
-    fsSaveDoc(FS_COLLECTIONS.LORRY_TRIPS, id, tripData);
+    setLorryTrips((prev) => {
+      const existing = prev.find((t) => t.id === id);
+      if (!existing) return prev;
+
+      const merged: LorryTrip = { ...existing, ...tripData };
+      const isAiya = merged.paymentType === 'AIYA';
+
+      if (isAiya) {
+        merged.totalAmount = 0;
+        merged.driverPayment = 0;
+        merged.cashReceived = 0;
+        merged.creditAmount = 0;
+      } else if (merged.paymentType === 'FULL') {
+        merged.cashReceived = merged.totalAmount || 0;
+        merged.driverPayment = 0;
+        merged.creditAmount = 0;
+      } else if (merged.paymentType === 'CREDIT') {
+        merged.creditAmount = merged.totalAmount || 0;
+        merged.cashReceived = 0;
+        merged.driverPayment = 0;
+      }
+
+      // Revert previous credit if credit changed or customer changed or no longer credit
+      const hadCredit = existing.creditAmount > 0 && existing.customerId;
+      const creditChanged =
+        existing.creditAmount !== merged.creditAmount ||
+        existing.customerId !== merged.customerId ||
+        merged.paymentType !== 'CREDIT';
+
+      if (hadCredit && creditChanged) {
+        setCustomers((cPrev) =>
+          cPrev.map((c) => {
+            if (c.id === existing.customerId) {
+              const updated = {
+                ...c,
+                currentBalance: Math.max(0, c.currentBalance - existing.creditAmount),
+                totalCredit: Math.max(0, c.totalCredit - existing.creditAmount),
+              };
+              fsSaveDoc(FS_COLLECTIONS.CUSTOMERS, c.id, updated);
+              return updated;
+            }
+            return c;
+          })
+        );
+        setCreditTransactions((ctxPrev) =>
+          ctxPrev.filter((ctx) => ctx.sourceReferenceId !== id)
+        );
+      }
+
+      // Apply new credit if merged has credit and it changed
+      if (merged.creditAmount > 0 && merged.customerId && (!hadCredit || creditChanged)) {
+        setCustomers((cPrev) =>
+          cPrev.map((c) => {
+            if (c.id === merged.customerId) {
+              const prevBal = c.currentBalance;
+              const newBal = prevBal + merged.creditAmount;
+              const ctx: CreditTransaction = {
+                id: `ctx-${Date.now()}`,
+                customerId: c.id,
+                customerName: c.name,
+                date: merged.date,
+                time: merged.time,
+                type: 'CREDIT_SALE',
+                amount: merged.creditAmount,
+                source: 'LORRY',
+                sourceReferenceId: id,
+                previousBalance: prevBal,
+                newBalance: newBal,
+                notes: `Lorry trip credit (${merged.lorryName} - ${merged.destination || merged.tripType})`,
+                createdTimestamp: Date.now(),
+              };
+              setCreditTransactions((tPrev) => [ctx, ...tPrev]);
+              fsSaveDoc(FS_COLLECTIONS.CREDIT_TRANSACTIONS, ctx.id, ctx);
+
+              const updatedCust = {
+                ...c,
+                currentBalance: newBal,
+                totalCredit: c.totalCredit + merged.creditAmount,
+                lastTransactionDate: merged.date,
+              };
+              fsSaveDoc(FS_COLLECTIONS.CUSTOMERS, c.id, updatedCust);
+              return updatedCust;
+            }
+            return c;
+          })
+        );
+      }
+
+      // Ensure any obsolete worker payment for this trip is removed
+      setWorkerPayments((wpPrev) => wpPrev.filter((w) => w.lorryTripId !== id));
+
+      fsSaveDoc(FS_COLLECTIONS.LORRY_TRIPS, id, merged);
+      return prev.map((t) => (t.id === id ? merged : t));
+    });
   };
 
   const deleteLorryTrip = (id: string) => {

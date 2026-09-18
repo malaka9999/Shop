@@ -22,8 +22,9 @@ import {
   FileText,
   DollarSign,
   AlertCircle,
+  Pencil,
 } from 'lucide-react';
-import { Lorry, LorryPaymentType } from '../types';
+import { Lorry, LorryPaymentType, LorryTrip } from '../types';
 
 interface RecallEntry {
   lorryId: string;
@@ -42,6 +43,7 @@ export const LorryView: React.FC = () => {
     selectedDate,
     todaySummary,
     addLorryTrip,
+    editLorryTrip,
     deleteLorryTrip,
     addLorry,
     firebaseSyncStatus,
@@ -79,6 +81,74 @@ export const LorryView: React.FC = () => {
   const [copied, setCopied] = useState<boolean>(false);
   const [showAddLorryModal, setShowAddLorryModal] = useState<boolean>(false);
   const [deletingTripId, setDeletingTripId] = useState<string | null>(null);
+
+  // Edit Trip Modal State
+  const [editingTrip, setEditingTrip] = useState<LorryTrip | null>(null);
+  const [editLorryId, setEditLorryId] = useState<string>('');
+  const [editMaterial, setEditMaterial] = useState<string>('පස්');
+  const [editCustomMaterial, setEditCustomMaterial] = useState<string>('');
+  const [editPaymentType, setEditPaymentType] = useState<LorryPaymentType>('FULL');
+  const [editAmount, setEditAmount] = useState<number>(300);
+  const [editDate, setEditDate] = useState<string>('');
+  const [editTime, setEditTime] = useState<string>('');
+  const [editCustomerId, setEditCustomerId] = useState<string>('');
+  const [editCustomerName, setEditCustomerName] = useState<string>('');
+  const [editNotes, setEditNotes] = useState<string>('');
+
+  // Open Edit Modal with pre-populated data
+  const handleOpenEditTripModal = (trip: LorryTrip) => {
+    setEditingTrip(trip);
+    setEditLorryId(trip.lorryId);
+    const mat = trip.material || trip.tripType || 'පස්';
+    const isPrimaryMat = (PRIMARY_MATERIAL_TYPES as readonly string[]).includes(mat);
+    if (isPrimaryMat) {
+      setEditMaterial(mat);
+      setEditCustomMaterial('');
+    } else {
+      setEditMaterial('CUSTOM');
+      setEditCustomMaterial(mat);
+    }
+    setEditPaymentType(trip.paymentType);
+    setEditAmount(trip.paymentType === 'AIYA' ? 0 : trip.totalAmount);
+    setEditDate(trip.date);
+    setEditTime(trip.time);
+    setEditCustomerId(trip.customerId || '');
+    setEditCustomerName(trip.customerName || '');
+    setEditNotes(trip.notes || '');
+  };
+
+  // Save changes to edited trip
+  const handleSaveEditedTrip = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!editingTrip) return;
+
+    const isAiya = editPaymentType === 'AIYA';
+    const finalMaterial = editMaterial === 'CUSTOM' ? (editCustomMaterial.trim() || 'පස්') : editMaterial;
+    const finalAmount = isAiya ? 0 : (Number(editAmount) || 0);
+    const updatedLorry = lorries.find((l) => l.id === editLorryId);
+
+    editLorryTrip(editingTrip.id, {
+      lorryId: editLorryId,
+      lorryName: updatedLorry?.name || editingTrip.lorryName,
+      material: finalMaterial,
+      tripType: finalMaterial,
+      destination: finalMaterial,
+      paymentType: editPaymentType,
+      totalAmount: finalAmount,
+      cashReceived: editPaymentType === 'FULL' ? finalAmount : 0,
+      driverPayment: 0,
+      creditAmount: editPaymentType === 'CREDIT' ? finalAmount : 0,
+      date: editDate || editingTrip.date,
+      time: editTime || editingTrip.time,
+      customerId: editPaymentType === 'CREDIT' ? (editCustomerId || undefined) : undefined,
+      customerName: editPaymentType === 'CREDIT' ? (customers.find((c) => c.id === editCustomerId)?.name || editCustomerName || undefined) : undefined,
+      notes: editNotes.trim() || undefined,
+    });
+
+    setEditingTrip(null);
+    setSuccessToast('ට්‍රිප් එක සාර්ථකව සංස්කරණය කරන ලදී! (Trip updated)');
+    setTimeout(() => setSuccessToast(null), 3000);
+  };
 
   // New Lorry Modal State
   const [newLorryName, setNewLorryName] = useState<string>('');
@@ -176,7 +246,9 @@ export const LorryView: React.FC = () => {
     if (!activeLorry) return;
 
     const finalMaterial = showCustomMaterialInput && customMaterial.trim() ? customMaterial.trim() : selectedMaterial;
-    const finalAmount = amount > 0 ? amount : 300;
+    // Aiyata mudal does NOT track any amount ("Aiyata mudal kiyana eka dunnama gana wadak na eke gana danna epa")
+    const isAiya = paymentMode === 'AIYATA';
+    const finalAmount = isAiya ? 0 : (amount > 0 ? amount : 300);
 
     // Automatic Real-time Timestamp at the moment of adding!
     const now = new Date();
@@ -187,10 +259,10 @@ export const LorryView: React.FC = () => {
     const formattedMinutes = minutes < 10 ? `0${minutes}` : minutes;
     const currentTimeString = `${formattedHours}:${formattedMinutes} ${ampm}`;
 
-    // Map Payment Mode as requested:
-    // Sampurna mudala -> cashReceived = finalAmount (Dawase anthiyama ekathu wenna one sampurna mudal vitharai)
-    // Aiyata mudal -> driverPayment = finalAmount, cashReceived = 0
-    // Nayata -> creditAmount = finalAmount, cashReceived = 0
+    // Map Payment Mode:
+    // Sampurna mudala -> cashReceived = finalAmount, driverPayment = 0, creditAmount = 0
+    // Aiyata mudal -> amount = 0, driverPayment = 0, cashReceived = 0, creditAmount = 0
+    // Nayata -> creditAmount = finalAmount, cashReceived = 0, driverPayment = 0
     let paymentType: LorryPaymentType = 'FULL';
     let cashReceived = 0;
     let driverPayment = 0;
@@ -204,7 +276,7 @@ export const LorryView: React.FC = () => {
     } else if (paymentMode === 'AIYATA') {
       paymentType = 'AIYA';
       cashReceived = 0;
-      driverPayment = finalAmount;
+      driverPayment = 0;
       creditAmount = 0;
     } else if (paymentMode === 'NAYATA') {
       paymentType = 'CREDIT';
@@ -233,14 +305,14 @@ export const LorryView: React.FC = () => {
       time: currentTimeString,
       tripType: finalMaterial,
       material: finalMaterial,
-      quantity: calcMode === 'unitRate' ? unitCount : finalAmount,
-      unitPrice: calcMode === 'unitRate' ? unitRate : undefined,
+      quantity: isAiya ? 1 : (calcMode === 'unitRate' ? unitCount : finalAmount),
+      unitPrice: isAiya ? 0 : (calcMode === 'unitRate' ? unitRate : undefined),
       calculationMode: calcMode === 'unitRate' ? 'unitPrice' : 'default300',
       destination: finalMaterial,
       totalAmount: finalAmount,
       paymentType,
       cashReceived,
-      driverPayment,
+      driverPayment: 0,
       creditAmount,
       customerId,
       customerName,
@@ -253,7 +325,7 @@ export const LorryView: React.FC = () => {
       lorryId: activeLorry.id,
       lorryName: activeLorry.name,
       material: finalMaterial,
-      amount: finalAmount,
+      amount: isAiya ? 0 : finalAmount,
     };
     setLastRecall(recall);
     try {
@@ -731,32 +803,47 @@ export const LorryView: React.FC = () => {
                 </button>
               </div>
 
-              {/* MODE A: DEFAULT 300 + PRESETS */}
+              {/* MODE A: DIRECT AMOUNT INPUT + QUICK PRESETS */}
               {calcMode === 'default300' && (
                 <div className="space-y-3">
-                  <div className="bg-slate-900 p-4 rounded-2xl border border-slate-800 text-center">
-                    <span className="text-xs text-slate-400 block mb-1">නියමිත මුදල (Amount in Rs):</span>
-                    <div className="flex items-center justify-center gap-2">
-                      <span className="text-3xl font-black text-amber-400 font-mono">
-                        Rs. {amount}
-                      </span>
+                  {/* DIRECT AMOUNT INPUT FIELD */}
+                  <div className="bg-slate-900 p-4 rounded-2xl border-2 border-amber-500/40 text-center space-y-2">
+                    <label htmlFor="input-lorry-custom-amount" className="text-xs font-bold text-amber-300 block">
+                      මුළු මුදල ඇතුළත් කරන්න (Enter Total Amount in Rs):
+                    </label>
+                    <div className="flex items-center justify-center gap-2 max-w-xs mx-auto">
+                      <span className="text-xl font-black text-amber-400 font-mono">Rs.</span>
+                      <input
+                        id="input-lorry-custom-amount"
+                        type="number"
+                        min="0"
+                        step="50"
+                        value={amount || ''}
+                        onChange={(e) => setAmount(Number(e.target.value))}
+                        className="w-full px-4 py-2.5 bg-slate-950 border-2 border-amber-400 rounded-2xl text-2xl font-black text-white focus:outline-none focus:ring-2 focus:ring-amber-400 font-mono text-center shadow-inner"
+                        placeholder="300"
+                        autoFocus
+                      />
                     </div>
+                    <span className="text-[11px] text-slate-400 block">
+                      ඔබට අවශ්‍ය ඕනෑම මුදලක් මෙහි කෙළින්ම ටයිප් කරන්න
+                    </span>
                   </div>
 
                   {/* Preset Amount Pills */}
                   <div>
                     <span className="text-[11px] text-slate-400 font-bold block mb-1.5 px-1">
-                      ඉක්මන් ප්‍රමාණ (Quick Presets):
+                      ඉක්මන් මුදල් ප්‍රමාණ (Quick Presets):
                     </span>
                     <div className="grid grid-cols-4 gap-1.5">
-                      {[300, 200, 250, 350, 400, 500, 600, 1000].map((preset) => (
+                      {[300, 250, 350, 500, 1000, 1500, 2000, 3000].map((preset) => (
                         <button
                           key={preset}
                           type="button"
                           onClick={() => handleSelectPresetAmount(preset)}
                           className={`py-2 px-2 rounded-xl text-xs font-black transition border ${
                             amount === preset
-                              ? 'bg-amber-500 text-slate-950 border-amber-400 shadow-md'
+                              ? 'bg-amber-500 text-slate-950 border-amber-400 shadow-md scale-[1.02]'
                               : 'bg-slate-900 hover:bg-slate-800 text-slate-300 border-slate-800'
                           }`}
                         >
@@ -766,19 +853,9 @@ export const LorryView: React.FC = () => {
                     </div>
                   </div>
 
-                  {/* Manual Amount Input */}
-                  <div className="pt-2">
-                    <label className="text-[11px] text-slate-400 font-bold block mb-1 px-1">
-                      වෙනත් මුදලක් ඇතුලත් කරන්න (Custom Amount):
-                    </label>
-                    <input
-                      type="number"
-                      value={amount || ''}
-                      onChange={(e) => setAmount(Number(e.target.value))}
-                      className="w-full px-3 py-2.5 bg-slate-900 border border-slate-800 rounded-2xl text-base font-black text-white focus:outline-none focus:border-amber-500 font-mono text-center"
-                      placeholder="300"
-                    />
-                  </div>
+                  <p className="text-[11px] text-slate-500 italic px-1">
+                    * සටහන: සම්පූර්ණ මුදල හෝ ණයට ලබාදීමේදී මෙම මුදල සටහන් වේ. (අයියාට මුදල් තෝරන්නේ නම් මුදලක් අවශ්‍ය නොවේ)
+                  </p>
                 </div>
               )}
 
@@ -875,6 +952,49 @@ export const LorryView: React.FC = () => {
                 </p>
               </div>
 
+              {/* DIRECT AMOUNT QUICK ADJUSTER RIGHT IN STEP 4 */}
+              <div className="bg-slate-900 border border-slate-800 rounded-2xl p-3 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-slate-300">
+                    මුළු මුදල (Amount to Charge):
+                  </span>
+                  <span className="text-base font-black text-amber-400 font-mono">
+                    Rs. {amount || 300}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="relative flex-1">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-500 font-mono">Rs.</span>
+                    <input
+                      type="number"
+                      value={amount || ''}
+                      onChange={(e) => setAmount(Number(e.target.value))}
+                      placeholder="300"
+                      className="w-full pl-9 pr-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-sm font-black text-white focus:outline-none focus:border-amber-400 font-mono"
+                    />
+                  </div>
+                  <div className="flex items-center gap-1">
+                    {[300, 500, 1000, 1500].map((p) => (
+                      <button
+                        key={p}
+                        type="button"
+                        onClick={() => setAmount(p)}
+                        className={`px-2 py-1.5 rounded-lg text-xs font-bold font-mono transition border ${
+                          amount === p
+                            ? 'bg-amber-500 text-slate-950 border-amber-400 font-black'
+                            : 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700'
+                        }`}
+                      >
+                        {p}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <p className="text-[10px] text-slate-500">
+                  * සම්පූර්ණ මුදල හෝ ණයට ලබාදීමේදී මෙම මුදල සටහන් වේ. අයියාට මුදල් සඳහා මුදලක් අවශ්‍ය නැත.
+                </p>
+              </div>
+
               {/* 3 HIGH CONTRAST PAYMENT BUTTONS */}
               <div className="space-y-2.5">
                 {/* 1. SAMPURNA MUDALA (FULL CASH TO BUSINESS) */}
@@ -892,15 +1012,18 @@ export const LorryView: React.FC = () => {
                       <span className="text-base font-black block leading-tight">
                         සම්පූර්ණ මුදල (Full Cash)
                       </span>
-                      <span className="text-xs text-emerald-100 font-normal">
-                        මුදල් ලැබුණි • දවසේ මුදල් පෙට්ටියට එකතු වේ
+                      <span className="text-xs text-emerald-100 font-medium block">
+                        මුදල් ලැබුණි: Rs. {amount || 300} • මුදල් පෙට්ටියට එකතු වේ
                       </span>
                     </div>
                   </div>
-                  <ArrowRight size={18} className="text-white shrink-0" />
+                  <div className="text-right shrink-0">
+                    <span className="block text-base font-black font-mono">Rs. {amount || 300}</span>
+                    <span className="text-[10px] text-emerald-200">සුරකින්න →</span>
+                  </div>
                 </button>
 
-                {/* 2. AIYATA MUDAL (DRIVER WAGE / ADVANCE) */}
+                {/* 2. AIYATA MUDAL (NO AMOUNT STORED) */}
                 <button
                   type="button"
                   id="btn-pay-aiyata"
@@ -913,14 +1036,16 @@ export const LorryView: React.FC = () => {
                     </div>
                     <div>
                       <span className="text-base font-black block leading-tight">
-                        අයියට මුදල් (Driver Wage)
+                        අයියාට මුදල් (Aiyata Mudal)
                       </span>
-                      <span className="text-xs text-amber-950 font-semibold">
-                        රියදුරුට මුදල් දුනි/තබාගති • පෙට්ටියට එකතු නොවේ
+                      <span className="text-xs text-amber-950 font-bold block">
+                        මුදලක් අවශ්‍ය නැත (ගාණක් සටහන් නොවේ) • ලාච්චුවට එකතු නොවේ
                       </span>
                     </div>
                   </div>
-                  <ArrowRight size={18} className="text-slate-950 shrink-0" />
+                  <div className="text-right shrink-0">
+                    <span className="block text-xs font-black bg-black/20 px-2.5 py-1 rounded-lg">රු. 0 (නැත)</span>
+                  </div>
                 </button>
 
                 {/* 3. NAYATA (CREDIT) */}
@@ -1151,9 +1276,15 @@ export const LorryView: React.FC = () => {
                     </div>
 
                     <div className="text-right">
-                      <span className="text-base font-black text-amber-400 font-mono block">
-                        {formatRs(trip.totalAmount)}
-                      </span>
+                      {trip.paymentType === 'AIYA' ? (
+                        <span className="text-xs font-black text-amber-400 block font-mono">
+                          අයියාට (රු. 0)
+                        </span>
+                      ) : (
+                        <span className="text-base font-black text-amber-400 font-mono block">
+                          {formatRs(trip.totalAmount)}
+                        </span>
+                      )}
                       <span
                         className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
                           trip.paymentType === 'FULL'
@@ -1166,50 +1297,333 @@ export const LorryView: React.FC = () => {
                         {trip.paymentType === 'FULL'
                           ? 'සම්පූර්ණ මුදල'
                           : trip.paymentType === 'AIYA'
-                          ? 'අයියට මුදල්'
+                          ? 'අයියාට මුදල්'
                           : 'ණයට'}
                       </span>
                     </div>
                   </div>
 
-                  {/* Delete Button */}
-                  <div className="flex justify-end pt-1 border-t border-slate-800/60">
-                    {deletingTripId === trip.id ? (
-                      <div className="flex items-center gap-2">
-                        <span className="text-[11px] text-rose-400 font-bold">මකන්නද?</span>
+                  {/* Actions: Edit & Delete */}
+                  <div className="flex items-center justify-between pt-1.5 border-t border-slate-800/60">
+                    <button
+                      type="button"
+                      onClick={() => handleOpenEditTripModal(trip)}
+                      className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-amber-400 text-xs font-bold transition active:scale-95 border border-slate-800"
+                      title="Edit Trip (ට්‍රිප් විස්තර සංස්කරණය)"
+                    >
+                      <Pencil size={12} className="text-amber-400" />
+                      <span>Edit (වෙනස් කරන්න)</span>
+                    </button>
+
+                    <div>
+                      {deletingTripId === trip.id ? (
+                        <div className="flex items-center gap-2">
+                          <span className="text-[11px] text-rose-400 font-bold">මකන්නද?</span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              deleteLorryTrip(trip.id);
+                              setDeletingTripId(null);
+                            }}
+                            className="px-2.5 py-1 bg-rose-600 text-white rounded-lg text-xs font-black shadow"
+                          >
+                            ඔව්
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setDeletingTripId(null)}
+                            className="px-2 py-1 bg-slate-800 text-slate-300 rounded-lg text-xs"
+                          >
+                            නැත
+                          </button>
+                        </div>
+                      ) : (
                         <button
                           type="button"
-                          onClick={() => {
-                            deleteLorryTrip(trip.id);
-                            setDeletingTripId(null);
-                          }}
-                          className="px-2 py-1 bg-rose-600 text-white rounded text-[11px] font-black"
+                          onClick={() => setDeletingTripId(trip.id)}
+                          className="text-slate-500 hover:text-rose-400 p-1 rounded-lg flex items-center gap-1 text-xs transition"
+                          title="Delete Trip"
                         >
-                          ඔව්
+                          <Trash2 size={13} />
+                          <span className="text-[11px]">මකන්න</span>
                         </button>
-                        <button
-                          type="button"
-                          onClick={() => setDeletingTripId(null)}
-                          className="px-2 py-1 bg-slate-800 text-slate-300 rounded text-[11px]"
-                        >
-                          නැත
-                        </button>
-                      </div>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={() => setDeletingTripId(trip.id)}
-                        className="text-slate-500 hover:text-rose-400 p-1 rounded"
-                        title="Delete Trip"
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    )}
+                      )}
+                    </div>
                   </div>
                 </div>
               ))}
             </div>
           )}
+        </div>
+      )}
+
+      {/* ======================================================== */}
+      {/* EDIT TRIP MODAL (ට්‍රිප් විස්තර සංස්කරණය)               */}
+      {/* ======================================================== */}
+      {editingTrip && (
+        <div className="fixed inset-0 z-50 bg-black/85 flex items-center justify-center p-3.5 backdrop-blur-xs overflow-y-auto">
+          <div className="bg-[#0b1329] border border-slate-700 w-full max-w-md rounded-3xl p-5 space-y-4 shadow-2xl my-auto">
+            <div className="flex items-center justify-between pb-2 border-b border-slate-800">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center">
+                  <Pencil size={16} />
+                </div>
+                <div>
+                  <h3 className="text-sm font-black text-white">ට්‍රිප් විස්තර සංස්කරණය (Edit Trip)</h3>
+                  <span className="text-[11px] text-slate-400">ඇතුලත් කළ දත්ත නිවැරදි කරන්න</span>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEditingTrip(null)}
+                className="text-slate-400 hover:text-white p-1"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveEditedTrip} className="space-y-3.5">
+              {/* Lorry Selector */}
+              <div>
+                <label className="text-xs font-bold text-slate-300 block mb-1">
+                  ලොරිය තෝරන්න (Select Lorry):
+                </label>
+                <select
+                  value={editLorryId}
+                  onChange={(e) => setEditLorryId(e.target.value)}
+                  className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white focus:outline-none focus:border-amber-500 font-bold"
+                >
+                  {lorries.map((l) => (
+                    <option key={l.id} value={l.id}>
+                      {l.name} {l.numberPlate ? `(${l.numberPlate})` : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Material Selector */}
+              <div>
+                <label className="text-xs font-bold text-slate-300 block mb-1">
+                  ද්‍රව්‍ය (Material):
+                </label>
+                <div className="grid grid-cols-3 gap-1.5 mb-2">
+                  {PRIMARY_MATERIAL_TYPES.map((mat) => (
+                    <button
+                      key={mat}
+                      type="button"
+                      onClick={() => {
+                        setEditMaterial(mat);
+                        setEditCustomMaterial('');
+                      }}
+                      className={`py-1.5 px-2 rounded-xl text-xs font-bold transition border ${
+                        editMaterial === mat
+                          ? 'bg-amber-500 text-slate-950 border-amber-400 shadow-sm'
+                          : 'bg-slate-900 text-slate-300 border-slate-800 hover:bg-slate-800'
+                      }`}
+                    >
+                      {mat}
+                    </button>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={() => setEditMaterial('CUSTOM')}
+                    className={`py-1.5 px-2 rounded-xl text-xs font-bold transition border ${
+                      editMaterial === 'CUSTOM'
+                        ? 'bg-amber-500 text-slate-950 border-amber-400 shadow-sm'
+                        : 'bg-slate-900 text-slate-300 border-slate-800 hover:bg-slate-800'
+                    }`}
+                  >
+                    වෙනත්...
+                  </button>
+                </div>
+                {editMaterial === 'CUSTOM' && (
+                  <input
+                    type="text"
+                    value={editCustomMaterial}
+                    onChange={(e) => setEditCustomMaterial(e.target.value)}
+                    placeholder="ද්‍රව්‍යයේ නම ලියන්න..."
+                    className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white focus:outline-none focus:border-amber-500"
+                  />
+                )}
+              </div>
+
+              {/* Payment Type Selection */}
+              <div>
+                <label className="text-xs font-bold text-slate-300 block mb-1">
+                  මුදල් ගෙවීමේ ආකාරය (Payment Type):
+                </label>
+                <div className="grid grid-cols-3 gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setEditPaymentType('FULL')}
+                    className={`py-2 px-1.5 rounded-xl text-xs font-black transition border text-center ${
+                      editPaymentType === 'FULL'
+                        ? 'bg-emerald-600 text-white border-emerald-400 shadow-md'
+                        : 'bg-slate-900 text-slate-400 border-slate-800 hover:text-white'
+                    }`}
+                  >
+                    සම්පූර්ණ මුදල
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditPaymentType('AIYA');
+                      setEditAmount(0);
+                    }}
+                    className={`py-2 px-1.5 rounded-xl text-xs font-black transition border text-center ${
+                      editPaymentType === 'AIYA'
+                        ? 'bg-amber-500 text-slate-950 border-amber-300 shadow-md'
+                        : 'bg-slate-900 text-slate-400 border-slate-800 hover:text-white'
+                    }`}
+                  >
+                    අයියාට මුදල්
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEditPaymentType('CREDIT')}
+                    className={`py-2 px-1.5 rounded-xl text-xs font-black transition border text-center ${
+                      editPaymentType === 'CREDIT'
+                        ? 'bg-rose-600 text-white border-rose-400 shadow-md'
+                        : 'bg-slate-900 text-slate-400 border-slate-800 hover:text-white'
+                    }`}
+                  >
+                    ණයට
+                  </button>
+                </div>
+              </div>
+
+              {/* Amount Input */}
+              <div>
+                <label className="text-xs font-bold text-slate-300 block mb-1">
+                  මුළු මුදල (Amount in Rs):
+                </label>
+                {editPaymentType === 'AIYA' ? (
+                  <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl text-xs text-amber-300 font-bold flex items-center justify-between">
+                    <span>අයියාට මුදල් සඳහා ගාණක් සටහන් නොවේ</span>
+                    <span className="font-mono text-white bg-black/40 px-2 py-0.5 rounded">රු. 0</span>
+                  </div>
+                ) : (
+                  <div className="space-y-1.5">
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400 font-mono">Rs.</span>
+                      <input
+                        type="number"
+                        min="0"
+                        value={editAmount || ''}
+                        onChange={(e) => setEditAmount(Number(e.target.value))}
+                        placeholder="300"
+                        className="w-full pl-9 pr-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-sm font-black text-white focus:outline-none focus:border-amber-500 font-mono"
+                      />
+                    </div>
+                    <div className="flex items-center gap-1">
+                      {[300, 500, 1000, 1500, 2000].map((p) => (
+                        <button
+                          key={p}
+                          type="button"
+                          onClick={() => setEditAmount(p)}
+                          className={`px-2 py-1 rounded-lg text-xs font-mono font-bold transition border ${
+                            editAmount === p
+                              ? 'bg-amber-500 text-slate-950 border-amber-400'
+                              : 'bg-slate-900 text-slate-400 border-slate-800 hover:bg-slate-800'
+                          }`}
+                        >
+                          {p}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Customer Selector if Credit */}
+              {editPaymentType === 'CREDIT' && (
+                <div className="p-3 bg-rose-950/20 border border-rose-900/50 rounded-xl space-y-2">
+                  <label className="text-xs font-bold text-rose-300 block">
+                    Customer තෝරන්න (Credit Customer):
+                  </label>
+                  <select
+                    value={editCustomerId}
+                    onChange={(e) => setEditCustomerId(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-950 border border-rose-900 rounded-xl text-xs text-white focus:outline-none focus:border-rose-500"
+                  >
+                    <option value="">-- Customer තෝරන්න --</option>
+                    {customers.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name} (ණය: Rs. {c.currentBalance})
+                      </option>
+                    ))}
+                  </select>
+                  {!editCustomerId && (
+                    <input
+                      type="text"
+                      value={editCustomerName}
+                      onChange={(e) => setEditCustomerName(e.target.value)}
+                      placeholder="හෝ අලුත් Customer නම..."
+                      className="w-full px-3 py-2 bg-slate-950 border border-rose-900 rounded-xl text-xs text-white focus:outline-none focus:border-rose-500"
+                    />
+                  )}
+                </div>
+              )}
+
+              {/* Date & Time */}
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-xs font-bold text-slate-300 block mb-1">
+                    දිනය (Date):
+                  </label>
+                  <input
+                    type="date"
+                    value={editDate}
+                    onChange={(e) => setEditDate(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white focus:outline-none focus:border-amber-500"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-slate-300 block mb-1">
+                    වේලාව (Time):
+                  </label>
+                  <input
+                    type="text"
+                    value={editTime}
+                    onChange={(e) => setEditTime(e.target.value)}
+                    placeholder="e.g. 10:30 AM"
+                    className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white focus:outline-none focus:border-amber-500"
+                  />
+                </div>
+              </div>
+
+              {/* Notes */}
+              <div>
+                <label className="text-xs font-bold text-slate-300 block mb-1">
+                  සටහන් (Notes):
+                </label>
+                <input
+                  type="text"
+                  value={editNotes}
+                  onChange={(e) => setEditNotes(e.target.value)}
+                  placeholder="වෙනත් විස්තර..."
+                  className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white focus:outline-none focus:border-amber-500"
+                />
+              </div>
+
+              {/* Submit Buttons */}
+              <div className="flex gap-2 pt-2">
+                <button
+                  type="submit"
+                  className="flex-1 py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 rounded-xl text-xs font-black shadow-lg active:scale-95 transition"
+                >
+                  වෙනස්කම් සුරකින්න (Save Changes)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setEditingTrip(null)}
+                  className="px-4 py-2.5 bg-slate-800 text-slate-300 rounded-xl text-xs font-bold"
+                >
+                  අවලංගුයි
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
 
