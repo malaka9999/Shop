@@ -10,6 +10,8 @@ import { WorkerView } from './components/WorkerView';
 import { CashView } from './components/CashView';
 import { ReportsView } from './components/ReportsView';
 import { SettingsView } from './components/SettingsView';
+import { OtherView } from './components/OtherView';
+import { ChevronLeft } from 'lucide-react';
 
 const AppContent: React.FC = () => {
   const { activeTab, setActiveTab } = useBusiness();
@@ -47,6 +49,20 @@ const AppContent: React.FC = () => {
 
         {/* Main Body View Switching */}
         <main className="flex-1 p-4 overflow-y-auto">
+          {/* Breadcrumb back button when inside an Other sub-module */}
+          {['cash', 'credit', 'expenses', 'reports', 'settings'].includes(activeTab) && (
+            <div className="mb-3 flex items-center justify-between bg-white border border-neutral-200/90 rounded-2xl px-3 py-2 shadow-xs">
+              <button
+                type="button"
+                onClick={() => setActiveTab('other')}
+                className="text-xs font-black text-neutral-800 hover:text-emerald-800 flex items-center gap-1.5 active:scale-95 transition"
+              >
+                <ChevronLeft size={16} className="text-emerald-700" />
+                <span>← Back to Other (වෙනත් අංශ වෙත)</span>
+              </button>
+            </div>
+          )}
+
           {activeTab === 'home' && (
             <HomeView
               onNavigate={handleNavigateTab}
@@ -78,6 +94,18 @@ const AppContent: React.FC = () => {
             />
           )}
 
+          {activeTab === 'workers' && <WorkerView />}
+
+          {activeTab === 'other' && (
+            <OtherView
+              onNavigate={handleNavigateTab}
+              onOpenSettings={(sec) => {
+                setSettingsSection(sec || 'general');
+                setActiveTab('settings');
+              }}
+            />
+          )}
+
           {activeTab === 'credit' && (
             <CreditView
               initialAction={creditAction}
@@ -86,8 +114,6 @@ const AppContent: React.FC = () => {
           )}
 
           {activeTab === 'expenses' && <ExpenseView />}
-
-          {activeTab === 'workers' && <WorkerView />}
 
           {activeTab === 'cash' && <CashView />}
 

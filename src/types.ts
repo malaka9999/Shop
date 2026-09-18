@@ -154,6 +154,6 @@ export interface DailyCashRecord {
   manualAdjustmentReason?: string;
 }
 
-export type ActiveTab = 'home' | 'lorries' | 'shop' | 'credit' | 'expenses' | 'workers' | 'cash' | 'reports' | 'settings';
+export type ActiveTab = 'home' | 'lorries' | 'shop' | 'credit' | 'expenses' | 'workers' | 'cash' | 'reports' | 'settings' | 'other';
 
 export type NavigationTab = ActiveTab;

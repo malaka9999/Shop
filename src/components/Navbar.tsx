@@ -16,6 +16,7 @@ import {
   FileText,
   Home,
   Cloud,
+  LayoutGrid,
 } from 'lucide-react';
 import { ActiveTab } from '../types';
 
@@ -210,43 +211,42 @@ export const BottomNav: React.FC<BottomNavProps> = ({ activeTab: propActiveTab, 
   }> = [
     { id: 'lorries', label: 'Lorry', labelSi: 'ලොරි', icon: Truck },
     { id: 'shop', label: 'Shop', labelSi: 'කඩේ', icon: ShoppingBag },
-    { id: 'workers', label: 'Workers', labelSi: 'සේවකයින්', icon: Users },
     { id: 'home', label: 'Home', labelSi: 'මුල් පිටුව', icon: Home },
-    { id: 'cash', label: 'Cash', labelSi: 'මුදල්', icon: Wallet },
-    { id: 'credit', label: 'Credit', labelSi: 'ණය', icon: CreditCard },
-    { id: 'expenses', label: 'Expenses', labelSi: 'වියදම්', icon: Receipt },
-    { id: 'reports', label: 'Reports', labelSi: 'වාර්තා', icon: FileText },
+    { id: 'workers', label: 'Workers', labelSi: 'සේවකයින්', icon: Users },
+    { id: 'other', label: 'Other', labelSi: 'වෙනත්', icon: LayoutGrid },
   ];
 
+  const isOtherActive = ['other', 'cash', 'credit', 'expenses', 'reports', 'settings'].includes(activeTab);
+
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-30 bg-white border-t border-neutral-200 shadow-lg select-none">
-      <div className="max-w-4xl mx-auto px-1 flex items-center justify-around overflow-x-auto py-1.5 scrollbar-none">
+    <nav className="fixed bottom-0 left-0 right-0 z-30 bg-white border-t border-neutral-200/90 shadow-xl select-none">
+      <div className="max-w-md mx-auto px-1 grid grid-cols-5 py-1.5">
         {navItems.map((item) => {
           const Icon = item.icon;
-          const isActive = activeTab === item.id;
+          const isActive = item.id === 'other' ? isOtherActive : activeTab === item.id;
           return (
             <button
               key={item.id}
               id={`nav-tab-${item.id}`}
               type="button"
               onClick={() => handleSelect(item.id)}
-              className={`flex flex-col items-center justify-center min-w-[48px] py-1 px-1.5 rounded-xl transition-all duration-150 active:scale-95 ${
+              className={`flex flex-col items-center justify-center py-1 px-1 rounded-xl transition-all duration-150 active:scale-95 ${
                 isActive
-                  ? 'text-emerald-800 font-extrabold bg-emerald-50 scale-105'
+                  ? 'text-emerald-800 font-black bg-emerald-50/80 shadow-xs'
                   : 'text-neutral-500 hover:text-neutral-900 font-medium'
               }`}
             >
               <div
-                className={`p-1 rounded-lg ${
-                  isActive ? 'bg-emerald-700 text-white shadow-sm' : 'text-neutral-500'
+                className={`p-1 rounded-lg transition-transform ${
+                  isActive ? 'bg-emerald-700 text-white shadow-sm scale-105' : 'text-neutral-500'
                 }`}
               >
-                <Icon size={18} />
+                <Icon size={19} />
               </div>
-              <span className="text-[10px] mt-0.5 leading-none whitespace-nowrap">
+              <span className="text-[11px] mt-0.5 leading-tight font-bold whitespace-nowrap">
                 {item.label}
               </span>
-              <span className="text-[9px] text-neutral-400 font-normal leading-none mt-0.5 whitespace-nowrap">
+              <span className="text-[9px] text-neutral-400 font-normal leading-tight whitespace-nowrap">
                 {item.labelSi}
               </span>
             </button>
