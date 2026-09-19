@@ -621,6 +621,48 @@ export const LorryView: React.FC = () => {
                   placeholder="ලොරි නම සොයන්න (Search lorry)..."
                   className="w-full pl-9 pr-3 py-2 bg-slate-900/90 border border-slate-800 rounded-2xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-amber-500"
                 />
+
+                {/* Autocomplete Suggestions Dropdown */}
+                {searchQuery.trim().length > 0 && (
+                  <div className="absolute left-0 right-0 mt-1 bg-[#0b1329] border border-slate-700 rounded-2xl shadow-2xl z-50 max-h-48 overflow-y-auto divide-y divide-slate-800/60">
+                    {lorries
+                      .filter(
+                        (l) =>
+                          l.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                          (l.numberPlate && l.numberPlate.toLowerCase().includes(searchQuery.toLowerCase()))
+                      )
+                      .map((lorry) => (
+                        <button
+                          key={lorry.id}
+                          type="button"
+                          onClick={() => {
+                            handleSelectLorry(lorry);
+                            setSearchQuery('');
+                          }}
+                          className="w-full px-4 py-2.5 text-left text-xs font-black text-white hover:bg-amber-500/10 flex items-center justify-between transition"
+                        >
+                          <div className="flex items-center gap-2">
+                            <Truck size={13} className="text-amber-400" />
+                            <span>{lorry.name}</span>
+                          </div>
+                          {lorry.numberPlate && (
+                            <span className="text-[10px] text-slate-500 font-mono font-bold">
+                              {lorry.numberPlate}
+                            </span>
+                          )}
+                        </button>
+                      ))}
+                    {lorries.filter(
+                      (l) =>
+                        l.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                        (l.numberPlate && l.numberPlate.toLowerCase().includes(searchQuery.toLowerCase()))
+                    ).length === 0 && (
+                      <div className="p-3 text-xs text-slate-500 text-center font-bold">
+                        මීට කලින් මෙවැනි ලොරියක් ඇතුලත් කර නැත
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* FREQUENT LORRIES (THE 6 REQUESTED LORRIES AT TOP) */}
@@ -1259,11 +1301,11 @@ export const LorryView: React.FC = () => {
           {/* LORRY-BY-LORRY BREAKDOWN CARDS */}
           <div className="space-y-2">
             <h3 className="text-xs font-black text-slate-400 uppercase tracking-wider px-1">
-              LORRY BY LORRY BREAKDOWN ({todaySummary.lorryBreakdown.length})
+              LORRY BY LORRY BREAKDOWN ({todaySummary.lorryBreakdown.filter(item => item.tripsCount > 0).length})
             </h3>
 
             <div className="space-y-2">
-              {todaySummary.lorryBreakdown.map((item) => {
+              {todaySummary.lorryBreakdown.filter(item => item.tripsCount > 0).map((item) => {
                 const lorryTripsForToday = currentDayTrips.filter((t) => t.lorryId === item.lorryId);
                 
                 // Group by material

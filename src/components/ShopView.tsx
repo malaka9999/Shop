@@ -37,6 +37,8 @@ export const ShopView: React.FC<ShopViewProps> = ({
     addShopSale,
     deleteShopSale,
     addProduct,
+    editProduct,
+    deleteProduct,
   } = useBusiness();
 
   // Active Category Filter Tab
@@ -53,6 +55,7 @@ export const ShopView: React.FC<ShopViewProps> = ({
   // Active Sale Builder (Staging state for rapid 1-3 tap sales)
   const [activeProduct, setActiveProduct] = useState<Product | null>(null);
   const [quantity, setQuantity] = useState<number>(1);
+  const [customSalePrice, setCustomSalePrice] = useState<number>(0);
   const [selectedCustomerId, setSelectedCustomerId] = useState<string>('');
   const [showNayaCustomerPicker, setShowNayaCustomerPicker] = useState<boolean>(false);
   const [lastAddedFeedback, setLastAddedFeedback] = useState<string | null>(null);
@@ -64,6 +67,21 @@ export const ShopView: React.FC<ShopViewProps> = ({
   const [customCategory, setCustomCategory] = useState<'parts' | 'other'>('parts');
   const [customPrice, setCustomPrice] = useState('');
   const [customUnit, setCustomUnit] = useState('Item');
+
+  // Product Manager Modal & Form States
+  const [showProductManagerModal, setShowProductManagerModal] = useState<boolean>(false);
+  const [managerSearchQuery, setManagerSearchQuery] = useState<string>('');
+  const [managerCategoryFilter, setManagerCategoryFilter] = useState<'all' | 'fuel' | 'oil' | 'parts' | 'other'>('all');
+  
+  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [showProductForm, setShowProductForm] = useState<boolean>(false);
+  
+  const [prodFormName, setProdFormName] = useState<string>('');
+  const [prodFormNameSinhala, setProdFormNameSinhala] = useState<string>('');
+  const [prodFormCategory, setProdFormCategory] = useState<'fuel' | 'oil' | 'parts' | 'other' | 'other_fuel'>('parts');
+  const [prodFormUnitPrice, setProdFormUnitPrice] = useState<string>('');
+  const [prodFormUnit, setProdFormUnit] = useState<string>('Item');
+  const [prodFormIsQuick, setProdFormIsQuick] = useState<boolean>(true);
 
   // Today's sales
   const currentSales = shopSales.filter((s) => s.date === selectedDate);
@@ -86,6 +104,7 @@ export const ShopView: React.FC<ShopViewProps> = ({
     setActiveProduct(product);
     const qtyToSet = defaultQty !== undefined ? defaultQty : product.category === 'oil' ? selectedOilQtyPreset : 1;
     setQuantity(qtyToSet);
+    setCustomSalePrice(product.unitPrice);
     setSelectedCustomerId('');
     setShowNayaCustomerPicker(false);
   };
@@ -99,18 +118,19 @@ export const ShopView: React.FC<ShopViewProps> = ({
       productId: activeProduct.id,
       productName: activeProduct.name,
       category: activeProduct.category,
-      unitPrice: activeProduct.unitPrice,
+      unitPrice: customSalePrice,
       unit: activeProduct.unit,
       quantity,
-      totalAmount: activeProduct.unitPrice * quantity,
+      totalAmount: customSalePrice * quantity,
       paymentMethod: 'CASH',
     });
 
-    setLastAddedFeedback(`Sold ${quantity}x ${activeProduct.name} for ${formatRs(activeProduct.unitPrice * quantity)} (CASH)`);
+    setLastAddedFeedback(`Sold ${quantity}x ${activeProduct.name} for ${formatRs(customSalePrice * quantity)} (CASH)`);
     setTimeout(() => setLastAddedFeedback(null), 3000);
 
     setActiveProduct(null);
     setQuantity(1);
+    setCustomSalePrice(0);
   };
 
   // Complete Sale: NAYA
@@ -124,10 +144,10 @@ export const ShopView: React.FC<ShopViewProps> = ({
       productId: activeProduct.id,
       productName: activeProduct.name,
       category: activeProduct.category,
-      unitPrice: activeProduct.unitPrice,
+      unitPrice: customSalePrice,
       unit: activeProduct.unit,
       quantity,
-      totalAmount: activeProduct.unitPrice * quantity,
+      totalAmount: customSalePrice * quantity,
       paymentMethod: 'NAYA',
       customerId,
       customerName: customer?.name || 'Customer',
@@ -135,13 +155,14 @@ export const ShopView: React.FC<ShopViewProps> = ({
 
     setLastAddedFeedback(
       `Added ${quantity}x ${activeProduct.name} to ${customer?.name}'s Naya! (${formatRs(
-        activeProduct.unitPrice * quantity
+        customSalePrice * quantity
       )})`
     );
     setTimeout(() => setLastAddedFeedback(null), 3500);
 
     setActiveProduct(null);
     setQuantity(1);
+    setCustomSalePrice(0);
     setShowNayaCustomerPicker(false);
     setSelectedCustomerId('');
   };
@@ -166,6 +187,55 @@ export const ShopView: React.FC<ShopViewProps> = ({
     handleSelectProduct(newP);
   };
 
+  const handleOpenAddProductForm = () => {
+    setEditingProduct(null);
+    setProdFormName('');
+    setProdFormNameSinhala('');
+    setProdFormCategory('parts');
+    setProdFormUnitPrice('');
+    setProdFormUnit('Item');
+    setProdFormIsQuick(true);
+    setShowProductForm(true);
+  };
+
+  const handleOpenEditProductForm = (p: Product) => {
+    setEditingProduct(p);
+    setProdFormName(p.name);
+    setProdFormNameSinhala(p.nameSinhala || p.name);
+    setProdFormCategory(p.category as any);
+    setProdFormUnitPrice(p.unitPrice.toString());
+    setProdFormUnit(p.unit);
+    setProdFormIsQuick(p.isQuickItem || false);
+    setShowProductForm(true);
+  };
+
+  const handleSaveProductForm = (e: React.FormEvent) => {
+    e.preventDefault();
+    const priceNum = parseFloat(prodFormUnitPrice);
+    if (!prodFormName.trim() || isNaN(priceNum) || priceNum < 0) return;
+
+    const prodData = {
+      name: prodFormName.trim(),
+      nameSinhala: prodFormNameSinhala.trim() || prodFormName.trim(),
+      category: prodFormCategory,
+      unitPrice: priceNum,
+      unit: prodFormUnit.trim() || 'Item',
+      isQuickItem: prodFormIsQuick,
+    };
+
+    if (editingProduct) {
+      editProduct(editingProduct.id, prodData);
+      setLastAddedFeedback(`Updated "${prodFormName}" details successfully!`);
+    } else {
+      const newP = addProduct(prodData);
+      setLastAddedFeedback(`Added "${prodFormName}" as new product!`);
+    }
+    
+    setTimeout(() => setLastAddedFeedback(null), 3000);
+    setShowProductForm(false);
+    setEditingProduct(null);
+  };
+
   return (
     <div className="space-y-4 pb-28">
       {/* Top Shop Summary Header */}
@@ -185,15 +255,25 @@ export const ShopView: React.FC<ShopViewProps> = ({
             </div>
           </div>
 
-          <button
-            type="button"
-            id="btn-shop-settings-prices"
-            onClick={onOpenSettingsPrices}
-            className="text-xs font-bold bg-amber-800 hover:bg-amber-700 px-3 py-1.5 rounded-xl flex items-center gap-1.5 text-amber-100 border border-amber-600/50 transition active:scale-95"
-          >
-            <Settings size={14} />
-            <span>Edit Prices</span>
-          </button>
+          <div className="flex flex-wrap gap-1.5 justify-end">
+            <button
+              type="button"
+              onClick={() => setShowProductManagerModal(true)}
+              className="text-xs font-black bg-amber-500 hover:bg-amber-400 text-slate-950 px-3 py-1.5 rounded-xl flex items-center gap-1 shadow transition active:scale-95"
+            >
+              <Plus size={14} />
+              <span>+ බඩු එකතු කිරීම / වෙනස් කිරීම (Manage Items)</span>
+            </button>
+            <button
+              type="button"
+              id="btn-shop-settings-prices"
+              onClick={onOpenSettingsPrices}
+              className="text-xs font-bold bg-amber-800 hover:bg-amber-700 px-3 py-1.5 rounded-xl flex items-center gap-1.5 text-amber-100 border border-amber-600/50 transition active:scale-95 animate-pulse"
+            >
+              <Settings size={14} />
+              <span>Edit Prices</span>
+            </button>
+          </div>
         </div>
 
         {/* Quantities & Grand Totals */}
@@ -258,71 +338,75 @@ export const ShopView: React.FC<ShopViewProps> = ({
             </button>
           </div>
 
-          {/* Quantity Stepper, Presets & Total */}
-          <div className="bg-white rounded-2xl p-3 border border-emerald-200 shadow-inner space-y-2.5">
-            <div className="flex items-center justify-between">
-              <div>
-                <span className="text-xs font-bold text-neutral-600 block">Quantity (ප්‍රමාණය):</span>
-                <span className="text-[11px] text-neutral-400">Unit: {activeProduct.unit || 'Litre'}</span>
-              </div>
-
-              {/* Precise Quantity Input with steppers */}
-              <div className="flex items-center gap-1.5">
-                {activeProduct.category === 'oil' && (
+          {/* Quantity Stepper, Custom Price, Presets & Total */}
+          <div className="bg-white rounded-2xl p-3 border border-emerald-200 shadow-inner space-y-3 text-neutral-950">
+            {/* Side-by-side Quantity & Custom Unit Price Inputs */}
+            <div className="grid grid-cols-2 gap-4 pb-2.5 border-b border-dashed border-emerald-100">
+              {/* Quantity Selector Section */}
+              <div className="space-y-1">
+                <label className="text-xs font-black text-neutral-600 block">
+                  Quantity ({activeProduct.unit || 'Litre'}):
+                </label>
+                <div className="flex items-center gap-1">
                   <button
                     type="button"
-                    onClick={() => setQuantity((prev) => Math.max(0.5, Number((prev - 0.5).toFixed(2))))}
-                    className="px-2 py-1.5 rounded-lg bg-neutral-100 hover:bg-neutral-200 text-neutral-700 text-xs font-bold active:scale-90"
-                    title="-0.5"
+                    onClick={() => setQuantity((prev) => Math.max(activeProduct.category === 'oil' ? 0.5 : 1, Number((prev - 1).toFixed(2))))}
+                    className="w-8 h-8 rounded-lg bg-neutral-100 hover:bg-neutral-200 text-neutral-800 flex items-center justify-center font-bold active:scale-90 transition shrink-0"
                   >
-                    -0.5
+                    <Minus size={14} />
                   </button>
-                )}
-                <button
-                  type="button"
-                  onClick={() => setQuantity((prev) => Math.max(activeProduct.category === 'oil' ? 0.5 : 1, Number((prev - 1).toFixed(2))))}
-                  className="w-8 h-8 rounded-lg bg-neutral-100 hover:bg-neutral-200 text-neutral-800 flex items-center justify-center font-bold active:scale-90"
-                >
-                  <Minus size={16} />
-                </button>
 
-                <input
-                  type="number"
-                  step="any"
-                  min="0.1"
-                  value={quantity}
-                  onChange={(e) => {
-                    const val = parseFloat(e.target.value);
-                    setQuantity(isNaN(val) ? 0 : val);
-                  }}
-                  className="w-16 text-center text-lg font-black text-neutral-900 border border-emerald-300 rounded-lg py-1 focus:outline-none focus:border-emerald-600"
-                />
+                  <input
+                    type="number"
+                    step="any"
+                    min="0.1"
+                    value={quantity}
+                    onChange={(e) => {
+                      const val = parseFloat(e.target.value);
+                      setQuantity(isNaN(val) ? 0 : val);
+                    }}
+                    className="w-14 text-center text-sm font-black text-neutral-900 border border-emerald-300 rounded-lg py-1 focus:outline-none focus:border-emerald-600"
+                  />
 
-                <button
-                  type="button"
-                  onClick={() => setQuantity((prev) => Number((prev + 1).toFixed(2)))}
-                  className="w-8 h-8 rounded-lg bg-emerald-100 hover:bg-emerald-200 text-emerald-900 flex items-center justify-center font-bold active:scale-90"
-                >
-                  <Plus size={16} />
-                </button>
-                {activeProduct.category === 'oil' && (
                   <button
                     type="button"
-                    onClick={() => setQuantity((prev) => Number((prev + 0.5).toFixed(2)))}
-                    className="px-2 py-1.5 rounded-lg bg-emerald-100 hover:bg-emerald-200 text-emerald-900 text-xs font-bold active:scale-90"
-                    title="+0.5"
+                    onClick={() => setQuantity((prev) => Number((prev + 1).toFixed(2)))}
+                    className="w-8 h-8 rounded-lg bg-emerald-100 hover:bg-emerald-200 text-emerald-950 flex items-center justify-center font-bold active:scale-90 transition shrink-0"
                   >
-                    +0.5
+                    <Plus size={14} />
                   </button>
-                )}
+                </div>
               </div>
 
-              <div className="text-right">
-                <span className="text-[11px] text-neutral-500 block">Total Amount</span>
-                <span className="text-xl font-black text-emerald-900">
-                  {formatRs(Math.round(activeProduct.unitPrice * quantity))}
-                </span>
+              {/* Custom Unit Price Input Section */}
+              <div className="space-y-1">
+                <label className="text-xs font-black text-neutral-600 block">
+                  Unit Price (මිල රු.):
+                </label>
+                <div className="relative">
+                  <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs font-bold text-neutral-400">Rs.</span>
+                  <input
+                    type="number"
+                    min="0"
+                    value={customSalePrice}
+                    onChange={(e) => {
+                      const val = parseFloat(e.target.value);
+                      setCustomSalePrice(isNaN(val) ? 0 : val);
+                    }}
+                    className="w-full pl-8 pr-2 py-1 text-sm font-black text-neutral-900 border border-emerald-300 rounded-lg focus:outline-none focus:border-emerald-600 font-mono"
+                  />
+                </div>
               </div>
+            </div>
+
+            {/* Total calculation row */}
+            <div className="flex items-center justify-between pt-1">
+              <span className="text-[11px] font-bold text-neutral-500 uppercase tracking-wide">
+                Total Amount
+              </span>
+              <span className="text-xl font-black text-emerald-900 font-mono">
+                {formatRs(Math.round(customSalePrice * quantity))}
+              </span>
             </div>
 
             {/* Quick Quantity Presets depending on category */}
@@ -865,6 +949,251 @@ export const ShopView: React.FC<ShopViewProps> = ({
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* COMPREHENSIVE PRODUCT & PRICE MANAGER MODAL */}
+      {showProductManagerModal && (
+        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4 backdrop-blur-xs text-neutral-900">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-5 shadow-2xl flex flex-col max-h-[90vh]">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between border-b border-neutral-100 pb-3 mb-3 shrink-0">
+              <div>
+                <h3 className="font-black text-base text-neutral-900 flex items-center gap-2">
+                  <ShoppingBag size={18} className="text-amber-500" />
+                  <span>බඩු කළමනාකරණය (Manage Products)</span>
+                </h3>
+                <p className="text-[11px] text-neutral-500 font-bold">භාණ්ඩ මිල ගණන් සහ විස්තර වෙනස් කිරීම</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowProductManagerModal(false);
+                  setShowProductForm(false);
+                }}
+                className="p-1.5 text-neutral-400 hover:text-neutral-700 font-bold bg-neutral-100 rounded-full hover:bg-neutral-200 transition"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* If Form is Active (Add or Edit Product) */}
+            {showProductForm ? (
+              <form onSubmit={handleSaveProductForm} className="space-y-4 overflow-y-auto pr-1 pb-2">
+                <div className="bg-amber-50 p-3 rounded-2xl border border-amber-200 text-xs text-amber-900 font-bold">
+                  {editingProduct 
+                    ? `සංස්කරණය කරන්නේ: ${editingProduct.name}`
+                    : "නව භාණ්ඩයක් ඇතුලත් කිරීම (Add New Product)"}
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                  <div>
+                    <label className="font-extrabold text-neutral-700 block mb-1">Product Name (English / ID): *</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. Delo Oil 1L"
+                      value={prodFormName}
+                      onChange={(e) => setProdFormName(e.target.value)}
+                      className="w-full px-3 py-2 rounded-xl border border-neutral-300 font-semibold focus:outline-none focus:border-amber-500 text-sm"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="font-extrabold text-neutral-700 block mb-1">Name in Sinhala (සිංහල නම):</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. ඩෙලෝ ඔයිල් 1L"
+                      value={prodFormNameSinhala}
+                      onChange={(e) => setProdFormNameSinhala(e.target.value)}
+                      className="w-full px-3 py-2 rounded-xl border border-neutral-300 font-semibold focus:outline-none focus:border-amber-500 text-sm"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="font-extrabold text-neutral-700 block mb-1">Category (ගණය): *</label>
+                    <select
+                      value={prodFormCategory}
+                      onChange={(e) => setProdFormCategory(e.target.value as any)}
+                      className="w-full px-3 py-2.5 rounded-xl border border-neutral-300 font-bold focus:outline-none focus:border-amber-500"
+                    >
+                      <option value="fuel">Fuel (පෙට්‍රල් / ඩීසල්)</option>
+                      <option value="oil">Oil (ඔයිල් වර්ග)</option>
+                      <option value="parts">Parts (අමතර කොටස්)</option>
+                      <option value="other">Other (වෙනත් බඩු)</option>
+                      <option value="other_fuel">Other Fuel (භූමිතෙල් / කළුතෙල්)</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="font-extrabold text-neutral-700 block mb-1">Unit Price (මිල රු.): *</label>
+                    <input
+                      type="number"
+                      required
+                      min="0"
+                      placeholder="e.g. 1500"
+                      value={prodFormUnitPrice}
+                      onChange={(e) => setProdFormUnitPrice(e.target.value)}
+                      className="w-full px-3 py-2 rounded-xl border border-neutral-300 font-semibold focus:outline-none focus:border-amber-500 text-sm font-mono"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="font-extrabold text-neutral-700 block mb-1">Unit / Volume label (ඒකකය): *</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. Litre / Can / Item"
+                      value={prodFormUnit}
+                      onChange={(e) => setProdFormUnit(e.target.value)}
+                      className="w-full px-3 py-2 rounded-xl border border-neutral-300 font-semibold focus:outline-none focus:border-amber-500 text-sm"
+                    />
+                  </div>
+
+                  <div className="flex items-center gap-2 pt-5">
+                    <input
+                      type="checkbox"
+                      id="is-quick-item"
+                      checked={prodFormIsQuick}
+                      onChange={(e) => setProdFormIsQuick(e.target.checked)}
+                      className="w-4 h-4 rounded border-neutral-300 text-amber-600 focus:ring-amber-500"
+                    />
+                    <label htmlFor="is-quick-item" className="text-xs font-black text-neutral-700 cursor-pointer">
+                      Quick Select Card (ඉක්මන් තේරීම)
+                    </label>
+                  </div>
+                </div>
+
+                <div className="flex gap-2 pt-2 border-t border-neutral-150 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowProductForm(false);
+                      setEditingProduct(null);
+                    }}
+                    className="flex-1 py-2.5 rounded-xl border border-neutral-300 font-bold text-neutral-700 hover:bg-neutral-50 active:scale-95 transition"
+                  >
+                    පෙර පිටුවට (Cancel)
+                  </button>
+                  <button
+                    type="submit"
+                    className="flex-1 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 font-black text-slate-950 shadow active:scale-95 transition"
+                  >
+                    සුරකින්න (Save Product)
+                  </button>
+                </div>
+              </form>
+            ) : (
+              /* List & Manage Existing Products */
+              <div className="flex flex-col flex-1 min-h-0 space-y-3">
+                {/* Search and Filter Row */}
+                <div className="space-y-2 shrink-0">
+                  <div className="flex gap-2">
+                    <div className="relative flex-1">
+                      <Search size={15} className="absolute left-3 top-3 text-neutral-400" />
+                      <input
+                        type="text"
+                        value={managerSearchQuery}
+                        onChange={(e) => setManagerSearchQuery(e.target.value)}
+                        placeholder="Search products..."
+                        className="w-full pl-8 pr-3 py-1.5 bg-neutral-50 border border-neutral-300 rounded-xl text-xs text-neutral-900 focus:outline-none focus:border-amber-500 font-semibold"
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleOpenAddProductForm}
+                      className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black flex items-center gap-1 shadow transition active:scale-95 shrink-0"
+                    >
+                      <Plus size={14} />
+                      <span>+ අලුත් එකක්</span>
+                    </button>
+                  </div>
+
+                  {/* Sub-Category Select Tabs */}
+                  <div className="flex gap-1 overflow-x-auto pb-1 border-b border-neutral-100">
+                    {['all', 'fuel', 'oil', 'parts', 'other'].map((cat) => (
+                      <button
+                        key={cat}
+                        type="button"
+                        onClick={() => setManagerCategoryFilter(cat as any)}
+                        className={`px-2.5 py-1 rounded-lg text-[10px] font-black uppercase transition shrink-0 ${
+                          managerCategoryFilter === cat
+                            ? 'bg-amber-500 text-slate-950 font-bold'
+                            : 'bg-neutral-100 text-neutral-600 hover:bg-neutral-200'
+                        }`}
+                      >
+                        {cat}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* List Container */}
+                <div className="flex-1 overflow-y-auto pr-1 divide-y divide-neutral-100">
+                  {products
+                    .filter((p) => {
+                      const matchesCat = managerCategoryFilter === 'all' || p.category === managerCategoryFilter || (managerCategoryFilter === 'fuel' && p.category === 'other_fuel');
+                      const matchesSearch = p.name.toLowerCase().includes(managerSearchQuery.toLowerCase()) || 
+                        (p.nameSinhala && p.nameSinhala.toLowerCase().includes(managerSearchQuery.toLowerCase()));
+                      return matchesCat && matchesSearch;
+                    })
+                    .map((p) => (
+                      <div key={p.id} className="py-2.5 flex items-center justify-between gap-3 group hover:bg-neutral-50 rounded-lg px-1 transition">
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="font-extrabold text-xs text-neutral-900 truncate">{p.name}</span>
+                            <span className="text-[9px] uppercase font-bold text-neutral-400 bg-neutral-100 px-1.5 py-0.2 rounded border border-neutral-200">
+                              {p.category}
+                            </span>
+                          </div>
+                          <span className="text-[11px] text-neutral-500 block font-medium mt-0.5">
+                            {p.nameSinhala || p.name} • {p.unit}
+                          </span>
+                        </div>
+
+                        <div className="flex items-center gap-2 shrink-0">
+                          <div className="text-right mr-1">
+                            <span className="font-black text-xs text-neutral-900 font-mono">Rs. {p.unitPrice.toLocaleString()}</span>
+                            {p.isQuickItem && <span className="text-[9px] text-emerald-600 font-extrabold block">Quick Select</span>}
+                          </div>
+                          
+                          <button
+                            type="button"
+                            onClick={() => handleOpenEditProductForm(p)}
+                            className="px-2 py-1 bg-amber-100 hover:bg-amber-200 text-amber-800 text-[10px] font-black rounded-lg transition"
+                          >
+                            Edit
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (confirm(`භාණ්ඩය "${p.name}" මකා දැමීමට අවශ්‍යද?`)) {
+                                deleteProduct(p.id);
+                              }
+                            }}
+                            className="px-2 py-1 bg-rose-50 hover:bg-rose-100 text-rose-600 text-[10px] font-black rounded-lg transition"
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+
+                  {products.filter((p) => {
+                    const matchesCat = managerCategoryFilter === 'all' || p.category === managerCategoryFilter || (managerCategoryFilter === 'fuel' && p.category === 'other_fuel');
+                    const matchesSearch = p.name.toLowerCase().includes(managerSearchQuery.toLowerCase()) || 
+                      (p.nameSinhala && p.nameSinhala.toLowerCase().includes(managerSearchQuery.toLowerCase()));
+                    return matchesCat && matchesSearch;
+                  }).length === 0 && (
+                    <div className="text-center py-8 text-xs text-neutral-400 font-bold">
+                      සොයන භාණ්ඩය හමු නොවීය (No matching products found)
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
