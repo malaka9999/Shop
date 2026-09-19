@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useBusiness } from '../context/BusinessContext';
 import { formatRs, shareToWhatsApp, getTodayDateString } from '../utils/formatters';
-import { PRIMARY_LORRY_NAMES, PRIMARY_MATERIAL_TYPES } from '../data/initialData';
+import { PRIMARY_LORRY_NAMES } from '../data/initialData';
 import {
   Truck,
   Plus,
@@ -50,6 +50,7 @@ export const LorryView: React.FC = () => {
     addLorry,
     firebaseSyncStatus,
     generateLorryWhatsAppSummary,
+    materialTypes,
   } = useBusiness();
 
   // Active Sub-Tab (Matching Screenshot):
@@ -103,7 +104,7 @@ export const LorryView: React.FC = () => {
     setEditingTrip(trip);
     setEditLorryId(trip.lorryId);
     const mat = trip.material || trip.tripType || 'පස්';
-    const isPrimaryMat = (PRIMARY_MATERIAL_TYPES as readonly string[]).includes(mat);
+    const isPrimaryMat = (materialTypes as readonly string[]).includes(mat);
     if (isPrimaryMat) {
       setEditMaterial(mat);
       setEditCustomMaterial('');
@@ -695,7 +696,7 @@ export const LorryView: React.FC = () => {
 
               {/* 6 Requested Materials in Big Tap Grid */}
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
-                {PRIMARY_MATERIAL_TYPES.map((mat) => (
+                {materialTypes.map((mat) => (
                   <button
                     key={mat}
                     type="button"
@@ -1545,7 +1546,7 @@ export const LorryView: React.FC = () => {
                   ද්‍රව්‍ය (Material):
                 </label>
                 <div className="grid grid-cols-3 gap-1.5 mb-2">
-                  {PRIMARY_MATERIAL_TYPES.map((mat) => (
+                  {materialTypes.map((mat) => (
                     <button
                       key={mat}
                       type="button"

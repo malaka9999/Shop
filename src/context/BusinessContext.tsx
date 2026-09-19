@@ -21,6 +21,7 @@ import {
   INITIAL_WORKERS,
   INITIAL_CUSTOMERS,
   DEFAULT_EXPENSE_CATEGORIES,
+  PRIMARY_MATERIAL_TYPES,
 } from '../data/initialData';
 import { getTodayDateString, getCurrentTimeString, formatRs, formatDateShort, getPreviousDateString, getNextDateString } from '../utils/formatters';
 import {
@@ -117,6 +118,7 @@ interface BusinessContextType {
   cashTransfers: CashTransfer[];
   dailyCashRecords: Record<string, DailyCashRecord>;
   expenseCategories: string[];
+  materialTypes: string[];
 
   // Daily Calculations
   todaySummary: DailySummaryData;
@@ -129,6 +131,9 @@ interface BusinessContextType {
   addLorry: (lorry: Omit<Lorry, 'id'>) => Lorry;
   editLorry: (id: string, data: Partial<Lorry>) => void;
   deleteLorry: (id: string) => void;
+  addMaterialType: (type: string) => void;
+  editMaterialType: (oldType: string, newType: string) => void;
+  deleteMaterialType: (type: string) => void;
 
   // Shop Actions
   addShopSale: (saleData: Omit<ShopSale, 'id' | 'createdTimestamp'>) => ShopSale;
@@ -193,6 +198,7 @@ const STORAGE_KEYS = {
   CASH_TRANSFERS: 'sl_cash_transfers_v1',
   DAILY_CASH: 'sl_daily_cash_records_v1',
   EXPENSE_CATS: 'sl_expense_cats_v1',
+  MATERIAL_TYPES: 'sl_material_types_v1',
   LANGUAGE: 'sl_language_pref_v1',
 };
 
@@ -396,7 +402,15 @@ export const BusinessProvider: React.FC<{ children: ReactNode }> = ({ children }
     return saved ? JSON.parse(saved) : DEFAULT_EXPENSE_CATEGORIES;
   });
 
+  const [materialTypes, setMaterialTypes] = useState<string[]>(() => {
+    const saved = localStorage.getItem(STORAGE_KEYS.MATERIAL_TYPES);
+    return saved ? JSON.parse(saved) : PRIMARY_MATERIAL_TYPES;
+  });
+
   // Sync back to localStorage whenever data changes
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEYS.MATERIAL_TYPES, JSON.stringify(materialTypes));
+  }, [materialTypes]);
   useEffect(() => {
     localStorage.setItem(STORAGE_KEYS.LORRIES, JSON.stringify(lorries));
   }, [lorries]);
@@ -1131,6 +1145,22 @@ export const BusinessProvider: React.FC<{ children: ReactNode }> = ({ children }
     fsDeleteDoc(FS_COLLECTIONS.LORRIES, id);
   };
 
+  const addMaterialType = (type: string) => {
+    if (!type.trim() || materialTypes.includes(type.trim())) return;
+    setMaterialTypes((prev) => [...prev, type.trim()]);
+  };
+
+  const editMaterialType = (oldType: string, newType: string) => {
+    if (!newType.trim() || oldType === newType.trim()) return;
+    setMaterialTypes((prev) =>
+      prev.map((t) => (t === oldType ? newType.trim() : t))
+    );
+  };
+
+  const deleteMaterialType = (type: string) => {
+    setMaterialTypes((prev) => prev.filter((t) => t !== type));
+  };
+
   // Actions: SHOP SALES
   const addShopSale = (saleData: Omit<ShopSale, 'id' | 'createdTimestamp'>): ShopSale => {
     const id = `sale-${Date.now()}`;
@@ -1787,6 +1817,7 @@ export const BusinessProvider: React.FC<{ children: ReactNode }> = ({ children }
       cashTransfers,
       dailyCashRecords,
       expenseCategories,
+      materialTypes,
       exportDate: new Date().toISOString(),
     };
     return JSON.stringify(backup, null, 2);
@@ -1807,6 +1838,7 @@ export const BusinessProvider: React.FC<{ children: ReactNode }> = ({ children }
       if (data.cashTransfers) setCashTransfers(data.cashTransfers);
       if (data.dailyCashRecords) setDailyCashRecords(data.dailyCashRecords);
       if (data.expenseCategories) setExpenseCategories(data.expenseCategories);
+      if (data.materialTypes) setMaterialTypes(data.materialTypes);
       return true;
     } catch (e) {
       console.error('Failed to import backup:', e);
@@ -1837,6 +1869,7 @@ export const BusinessProvider: React.FC<{ children: ReactNode }> = ({ children }
         cashTransfers,
         dailyCashRecords,
         expenseCategories,
+        materialTypes,
 
         todaySummary,
         getSummaryForDate,
@@ -1847,6 +1880,9 @@ export const BusinessProvider: React.FC<{ children: ReactNode }> = ({ children }
         addLorry,
         editLorry,
         deleteLorry,
+        addMaterialType,
+        editMaterialType,
+        deleteMaterialType,
 
         addShopSale,
         quickAddProductSale,

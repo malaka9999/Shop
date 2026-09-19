@@ -17,7 +17,7 @@ import {
   RefreshCw,
   CheckCircle2,
 } from 'lucide-react';
-import { Product } from '../types';
+import { Product, Lorry } from '../types';
 
 interface SettingsViewProps {
   initialSection?: 'prices' | 'lorries' | 'workers' | 'general';
@@ -32,10 +32,16 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ initialSection = 'pr
     addProduct,
     deleteProduct,
     addLorry,
+    editLorry,
     deleteLorry,
+    editProduct,
     resetToDefaultData,
     firebaseSyncStatus,
     syncAllToFirebase,
+    materialTypes,
+    addMaterialType,
+    editMaterialType,
+    deleteMaterialType,
   } = useBusiness();
 
   const [isSyncing, setIsSyncing] = useState(false);
@@ -54,39 +60,110 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ initialSection = 'pr
     }
   };
 
-  const [activeSection, setActiveSection] = useState<'prices' | 'lorries' | 'workers' | 'general'>(
-    initialSection
+  const [activeSection, setActiveSection] = useState<'prices' | 'lorries' | 'general'>(
+    initialSection === 'workers' ? 'prices' : (initialSection as any)
   );
 
-  // Price Edit Modal
+  // Product Edit Modal (extended to edit everything)
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [newPrice, setNewPrice] = useState<string>('');
+  const [newProductName, setNewProductName] = useState<string>('');
+  const [newProductSinhala, setNewProductSinhala] = useState<string>('');
+  const [newProductCategory, setNewProductCategory] = useState<string>('');
+  const [newProductUnit, setNewProductUnit] = useState<string>('');
   const [saveSuccess, setSaveSuccess] = useState<string | null>(null);
+
+  // Add Product Modal
+  const [showAddProduct, setShowAddProduct] = useState(false);
+  const [addProductName, setAddProductName] = useState('');
+  const [addProductSinhala, setAddProductSinhala] = useState('');
+  const [addProductCategory, setAddProductCategory] = useState('fuel');
+  const [addProductUnit, setAddProductUnit] = useState('1L');
+  const [addProductPrice, setAddProductPrice] = useState('');
 
   // New Lorry Modal
   const [showAddLorry, setShowAddLorry] = useState(false);
   const [lorryName, setLorryName] = useState('');
   const [lorryPlate, setLorryPlate] = useState('');
+  const [lorryDriver, setLorryDriver] = useState('');
+  const [lorryCapacity, setLorryCapacity] = useState('3 Cube');
+
+  // Edit Lorry Modal
+  const [editingLorry, setEditingLorry] = useState<Lorry | null>(null);
+  const [editLorryName, setEditLorryName] = useState('');
+  const [editLorryPlate, setEditLorryPlate] = useState('');
+  const [editLorryDriver, setEditLorryDriver] = useState('');
+  const [editLorryCapacity, setEditLorryCapacity] = useState('');
+  const [editLorryNotes, setEditLorryNotes] = useState('');
+
+  // Materials State inside Settings
+  const [newMaterialType, setNewMaterialType] = useState('');
+  const [editingMaterial, setEditingMaterial] = useState<string | null>(null);
+  const [editMaterialName, setEditMaterialName] = useState('');
 
   // Reset confirmation
   const [showResetConfirm, setShowResetConfirm] = useState(false);
 
   const handleOpenPriceModal = (product: Product) => {
     setEditingProduct(product);
+    setNewProductName(product.name);
+    setNewProductSinhala(product.nameSinhala || '');
+    setNewProductCategory(product.category);
+    setNewProductUnit(product.unit);
     setNewPrice(String(product.unitPrice));
   };
 
-  const handleSavePrice = (e: React.FormEvent) => {
+  const handleSaveProduct = (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingProduct) return;
     const priceNum = parseFloat(newPrice);
-    if (isNaN(priceNum) || priceNum <= 0) return;
+    if (isNaN(priceNum) || priceNum < 0) return;
 
-    updateProductPrice(editingProduct.id, priceNum);
-    setSaveSuccess(`Updated ${editingProduct.name} to ${formatRs(priceNum)}`);
+    editProduct(editingProduct.id, {
+      name: newProductName.trim(),
+      nameSinhala: newProductSinhala.trim(),
+      category: newProductCategory as any,
+      unit: newProductUnit.trim(),
+      unitPrice: priceNum,
+    });
+
+    setSaveSuccess(`Updated ${newProductName.trim()}`);
+    setTimeout(() => setSaveSuccess(null), 3000);
+    setEditingProduct(null);
+  };
+
+  const handleAddProduct = (e: React.FormEvent) => {
+    e.preventDefault();
+    const priceNum = parseFloat(addProductPrice);
+    if (!addProductName.trim() || isNaN(priceNum) || priceNum < 0) return;
+
+    addProduct({
+      name: addProductName.trim(),
+      nameSinhala: addProductSinhala.trim(),
+      category: addProductCategory as any,
+      unit: addProductUnit.trim(),
+      unitPrice: priceNum,
+      isQuickItem: true,
+    });
+
+    setSaveSuccess(`Added product: ${addProductName.trim()}`);
     setTimeout(() => setSaveSuccess(null), 3000);
 
-    setEditingProduct(null);
+    setAddProductName('');
+    setAddProductSinhala('');
+    setAddProductCategory('fuel');
+    setAddProductUnit('1L');
+    setAddProductPrice('');
+    setShowAddProduct(false);
+  };
+
+  const handleDeleteProduct = (id: string) => {
+    if (window.confirm('Are you sure you want to delete this product?')) {
+      deleteProduct(id);
+      setEditingProduct(null);
+      setSaveSuccess('Product deleted successfully');
+      setTimeout(() => setSaveSuccess(null), 3000);
+    }
   };
 
   const handleCreateLorry = (e: React.FormEvent) => {
@@ -96,13 +173,58 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ initialSection = 'pr
     addLorry({
       name: lorryName.trim(),
       numberPlate: lorryPlate.trim().toUpperCase(),
-      capacity: 'Standard Tipper',
+      capacity: lorryCapacity,
+      driverName: lorryDriver.trim() || undefined,
       status: 'active',
     });
 
     setLorryName('');
     setLorryPlate('');
+    setLorryDriver('');
+    setLorryCapacity('3 Cube');
     setShowAddLorry(false);
+  };
+
+  const handleOpenEditLorryModal = (lorry: Lorry) => {
+    setEditingLorry(lorry);
+    setEditLorryName(lorry.name);
+    setEditLorryPlate(lorry.numberPlate);
+    setEditLorryDriver(lorry.driverName || '');
+    setEditLorryCapacity(lorry.capacity || '');
+    setEditLorryNotes(lorry.notes || '');
+  };
+
+  const handleSaveLorry = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingLorry) return;
+
+    editLorry(editingLorry.id, {
+      name: editLorryName.trim(),
+      numberPlate: editLorryPlate.trim().toUpperCase(),
+      driverName: editLorryDriver.trim() || undefined,
+      capacity: editLorryCapacity.trim(),
+      notes: editLorryNotes.trim() || undefined,
+    });
+
+    setSaveSuccess(`Updated Lorry ${editLorryName}`);
+    setTimeout(() => setSaveSuccess(null), 3000);
+    setEditingLorry(null);
+  };
+
+  const handleDeleteLorry = (id: string) => {
+    if (window.confirm('Are you sure you want to delete this lorry?')) {
+      deleteLorry(id);
+      setEditingLorry(null);
+      setSaveSuccess('Lorry deleted successfully');
+      setTimeout(() => setSaveSuccess(null), 3000);
+    }
+  };
+
+  const handleAddMaterialType = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newMaterialType.trim()) return;
+    addMaterialType(newMaterialType.trim());
+    setNewMaterialType('');
   };
 
   return (
@@ -174,15 +296,25 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ initialSection = 'pr
           <div className="bg-amber-50 border border-amber-200 rounded-2xl p-3 text-xs text-amber-900 font-semibold flex items-center gap-2">
             <Tag size={16} className="text-amber-700 shrink-0" />
             <span>
-              Tap any item to quickly update its price per litre/unit. Historical sales remain
+              Tap any item to update its name, category, or unit price. Historical sales remain
               unchanged!
             </span>
           </div>
 
           <div className="bg-white rounded-3xl p-4 border border-neutral-200 shadow-xs space-y-2">
-            <h3 className="text-xs font-black text-neutral-800 uppercase tracking-wide px-1">
-              Fuel & Oil Price List ({products.length} Items)
-            </h3>
+            <div className="flex items-center justify-between px-1 mb-2">
+              <h3 className="text-xs font-black text-neutral-800 uppercase tracking-wide">
+                Fuel & Oil Price List ({products.length} Items)
+              </h3>
+              <button
+                type="button"
+                onClick={() => setShowAddProduct(true)}
+                className="text-xs font-bold bg-emerald-700 hover:bg-emerald-800 text-white px-3 py-1.5 rounded-xl flex items-center gap-1 active:scale-95 transition"
+              >
+                <Plus size={14} />
+                <span>+ Add Product</span>
+              </button>
+            </div>
 
             <div className="divide-y divide-neutral-100">
               {products.map((p) => (
@@ -223,50 +355,161 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ initialSection = 'pr
 
       {/* SECTION 2: LORRIES */}
       {activeSection === 'lorries' && (
-        <div className="space-y-3">
-          <div className="flex items-center justify-between px-1">
-            <h3 className="text-xs font-black text-neutral-800 uppercase tracking-wide">
-              Active Fleet ({lorries.length} Lorries)
-            </h3>
-            <button
-              type="button"
-              onClick={() => setShowAddLorry(true)}
-              className="text-xs font-bold bg-emerald-700 hover:bg-emerald-800 text-white px-3 py-1.5 rounded-xl flex items-center gap-1 active:scale-95"
-            >
-              <Plus size={14} />
-              <span>+ Add Lorry</span>
-            </button>
-          </div>
-
-          <div className="space-y-2">
-            {lorries.map((l) => (
-              <div
-                key={l.id}
-                className="bg-white rounded-2xl p-4 border border-neutral-200 shadow-xs flex items-center justify-between"
+        <div className="space-y-4">
+          <div className="space-y-3">
+            <div className="flex items-center justify-between px-1">
+              <h3 className="text-xs font-black text-neutral-800 uppercase tracking-wide">
+                Active Fleet ({lorries.length} Lorries)
+              </h3>
+              <button
+                type="button"
+                onClick={() => setShowAddLorry(true)}
+                className="text-xs font-bold bg-emerald-700 hover:bg-emerald-800 text-white px-3 py-1.5 rounded-xl flex items-center gap-1 active:scale-95 transition"
               >
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-800 flex items-center justify-center font-black text-sm">
-                    <Truck size={20} />
+                <Plus size={14} />
+                <span>+ Add Lorry</span>
+              </button>
+            </div>
+
+            <div className="space-y-2">
+              {lorries.map((l) => (
+                <div
+                  key={l.id}
+                  className="bg-white rounded-2xl p-4 border border-neutral-200 shadow-xs flex items-center justify-between hover:border-neutral-300 transition"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-800 flex items-center justify-center font-black text-sm">
+                      <Truck size={20} />
+                    </div>
+                    <div>
+                      <h4 className="font-black text-sm text-neutral-900">{l.name}</h4>
+                      <span className="text-xs font-mono font-bold text-neutral-500 block">
+                        {l.numberPlate} • {l.capacity} {l.driverName ? `• Driver: ${l.driverName}` : ''}
+                      </span>
+                    </div>
                   </div>
-                  <div>
-                    <h4 className="font-black text-sm text-neutral-900">{l.name}</h4>
-                    <span className="text-xs font-mono font-bold text-neutral-500 block">
-                      {l.numberPlate} • {l.capacity}
-                    </span>
+
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => handleOpenEditLorryModal(l)}
+                      className="p-2 text-neutral-400 hover:text-emerald-700 hover:bg-neutral-50 rounded-xl transition"
+                      title="Edit Lorry"
+                    >
+                      <Edit2 size={15} />
+                    </button>
+                    {lorries.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteLorry(l.id)}
+                        className="p-2 text-neutral-400 hover:text-rose-600 hover:bg-neutral-50 rounded-xl transition"
+                        title="Delete Lorry"
+                      >
+                        <Trash2 size={15} />
+                      </button>
+                    )}
                   </div>
                 </div>
+              ))}
+            </div>
+          </div>
 
-                {lorries.length > 1 && (
-                  <button
-                    type="button"
-                    onClick={() => deleteLorry(l.id)}
-                    className="p-2 text-neutral-300 hover:text-rose-600 rounded-xl"
-                  >
-                    <Trash2 size={16} />
-                  </button>
-                )}
-              </div>
-            ))}
+          {/* Material Types Management Section */}
+          <div className="bg-white rounded-3xl p-5 border border-neutral-200 shadow-xs space-y-4">
+            <div>
+              <h3 className="font-extrabold text-sm text-neutral-900">
+                Lorry Trip Material Types (ද්‍රව්‍ය වර්ග)
+              </h3>
+              <p className="text-[11px] text-neutral-500">
+                Manage materials selectable when entering lorry trips.
+              </p>
+            </div>
+
+            <form onSubmit={handleAddMaterialType} className="flex gap-2">
+              <input
+                type="text"
+                placeholder="Ex: කළුගල් / බොරළු (New Material Name)"
+                value={newMaterialType}
+                onChange={(e) => setNewMaterialType(e.target.value)}
+                className="flex-1 px-3 py-2 bg-neutral-50 border border-neutral-300 rounded-xl text-xs text-neutral-900 focus:outline-none focus:border-emerald-750 font-bold placeholder-neutral-400"
+              />
+              <button
+                type="submit"
+                className="px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs rounded-xl flex items-center gap-1 active:scale-95 transition whitespace-nowrap"
+              >
+                <Plus size={14} />
+                Add
+              </button>
+            </form>
+
+            <div className="grid grid-cols-2 gap-2">
+              {materialTypes.map((mat) => (
+                <div
+                  key={mat}
+                  className="px-3 py-2.5 bg-neutral-50 border border-neutral-200 rounded-xl flex items-center justify-between text-xs"
+                >
+                  {editingMaterial === mat ? (
+                    <div className="flex items-center gap-1.5 w-full">
+                      <input
+                        type="text"
+                        value={editMaterialName}
+                        onChange={(e) => setEditMaterialName(e.target.value)}
+                        className="flex-1 px-1.5 py-0.5 border border-neutral-300 rounded text-[11px] font-bold"
+                        autoFocus
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (editMaterialName.trim()) {
+                            editMaterialType(mat, editMaterialName.trim());
+                          }
+                          setEditingMaterial(null);
+                        }}
+                        className="p-1 text-emerald-650 hover:bg-emerald-50 rounded"
+                      >
+                        <Check size={14} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setEditingMaterial(null)}
+                        className="p-1 text-neutral-400 hover:bg-neutral-50 rounded"
+                      >
+                        <X size={14} />
+                      </button>
+                    </div>
+                  ) : (
+                    <>
+                      <span className="font-bold text-neutral-800">{mat}</span>
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditingMaterial(mat);
+                            setEditMaterialName(mat);
+                          }}
+                          className="p-1 text-neutral-400 hover:text-emerald-700 rounded-md"
+                        >
+                          <Edit2 size={13} />
+                        </button>
+                        {materialTypes.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (window.confirm(`Delete material type "${mat}"?`)) {
+                                deleteMaterialType(mat);
+                              }
+                            }}
+                            className="p-1 text-neutral-400 hover:text-rose-600 rounded-md"
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        )}
+                      </div>
+                    </>
+                  )}
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       )}
@@ -377,14 +620,14 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ initialSection = 'pr
         </div>
       )}
 
-      {/* EDIT PRICE MODAL */}
+      {/* EDIT PRODUCT MODAL */}
       {editingProduct && (
         <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4 backdrop-blur-xs">
           <div className="bg-white rounded-3xl max-w-sm w-full p-5 shadow-2xl space-y-4">
             <div className="flex items-center justify-between border-b border-neutral-100 pb-2">
               <div>
                 <h3 className="font-black text-base text-neutral-900">
-                  Update Price (මිල සංශෝධනය)
+                  Edit Product (බඩු සංශෝධනය)
                 </h3>
                 <p className="text-xs text-neutral-500">{editingProduct.name}</p>
               </div>
@@ -397,15 +640,74 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ initialSection = 'pr
               </button>
             </div>
 
-            <form onSubmit={handleSavePrice} className="space-y-3 text-xs">
+            <form onSubmit={handleSaveProduct} className="space-y-3 text-xs">
               <div>
                 <label className="font-bold text-neutral-700 block mb-1">
-                  New Price per {editingProduct.unit} (නව මිල Rs.)
+                  Product Name (English / ලේබලය)
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={newProductName}
+                  onChange={(e) => setNewProductName(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl border border-neutral-300 font-semibold focus:outline-none focus:border-emerald-600 text-sm text-neutral-900"
+                />
+              </div>
+
+              <div>
+                <label className="font-bold text-neutral-700 block mb-1">
+                  Product Name (Sinhala / සිංහල නම)
+                </label>
+                <input
+                  type="text"
+                  value={newProductSinhala}
+                  onChange={(e) => setNewProductSinhala(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl border border-neutral-300 font-semibold focus:outline-none focus:border-emerald-600 text-sm text-neutral-900"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="font-bold text-neutral-700 block mb-1">
+                    Category (වර්ගය)
+                  </label>
+                  <select
+                    value={newProductCategory}
+                    onChange={(e) => setNewProductCategory(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl border border-neutral-300 font-semibold focus:outline-none focus:border-emerald-600 text-xs text-neutral-950 bg-white"
+                  >
+                    <option value="fuel">Fuel (ඩීසල්)</option>
+                    <option value="oil">Oil (ඔයිල්)</option>
+                    <option value="other_fuel">Other Fuel (වෙනත් ඉන්ධන)</option>
+                    <option value="parts">Parts (කොටස්)</option>
+                    <option value="other">Other Items (වෙනත් බඩු)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="font-bold text-neutral-700 block mb-1">
+                    Unit (මිනුම් ඒකකය)
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. 1L, Can, Set, Item"
+                    value={newProductUnit}
+                    onChange={(e) => setNewProductUnit(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl border border-neutral-300 font-semibold focus:outline-none focus:border-emerald-600 text-xs text-neutral-900"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="font-bold text-neutral-700 block mb-1">
+                  Unit Price (Rs.) (ඒකක මිල)
                 </label>
                 <input
                   type="number"
                   required
-                  min="1"
+                  min="0"
+                  step="any"
                   value={newPrice}
                   onChange={(e) => setNewPrice(e.target.value)}
                   className="w-full px-3 py-2.5 rounded-xl border border-neutral-300 font-black text-lg text-neutral-900 focus:outline-none focus:border-emerald-600"
@@ -413,6 +715,14 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ initialSection = 'pr
               </div>
 
               <div className="flex gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => handleDeleteProduct(editingProduct.id)}
+                  className="px-3.5 rounded-xl border border-rose-250 text-rose-600 hover:bg-rose-50 font-bold flex items-center justify-center transition"
+                  title="Delete Product"
+                >
+                  <Trash2 size={16} />
+                </button>
                 <button
                   type="button"
                   onClick={() => setEditingProduct(null)}
@@ -424,7 +734,121 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ initialSection = 'pr
                   type="submit"
                   className="flex-1 py-2.5 rounded-xl bg-emerald-700 hover:bg-emerald-800 font-black text-white"
                 >
-                  Save New Price
+                  Save Changes
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ADD PRODUCT MODAL */}
+      {showAddProduct && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4 backdrop-blur-xs">
+          <div className="bg-white rounded-3xl max-w-sm w-full p-5 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-neutral-100 pb-2">
+              <h3 className="font-black text-base text-neutral-900">
+                Add New Product (නව බඩුවක් එක් කිරීම)
+              </h3>
+              <button
+                type="button"
+                onClick={() => setShowAddProduct(false)}
+                className="p-1 text-neutral-400 hover:text-neutral-700"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <form onSubmit={handleAddProduct} className="space-y-3 text-xs">
+              <div>
+                <label className="font-bold text-neutral-700 block mb-1">
+                  Product Name (English / ලේබලය)
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Engine Oil 15W40"
+                  value={addProductName}
+                  onChange={(e) => setAddProductName(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl border border-neutral-300 font-semibold focus:outline-none focus:border-emerald-600 text-sm text-neutral-900"
+                />
+              </div>
+
+              <div>
+                <label className="font-bold text-neutral-700 block mb-1">
+                  Product Name (Sinhala / සිංහල නම)
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. එන්ජින් ඔයිල්"
+                  value={addProductSinhala}
+                  onChange={(e) => setAddProductSinhala(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl border border-neutral-300 font-semibold focus:outline-none focus:border-emerald-600 text-sm text-neutral-900"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="font-bold text-neutral-700 block mb-1">
+                    Category (වර්ගය)
+                  </label>
+                  <select
+                    value={addProductCategory}
+                    onChange={(e) => setAddProductCategory(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl border border-neutral-300 font-semibold focus:outline-none focus:border-emerald-600 text-xs text-neutral-950 bg-white"
+                  >
+                    <option value="fuel">Fuel (ඩීසල්)</option>
+                    <option value="oil">Oil (ඔයිල්)</option>
+                    <option value="other_fuel">Other Fuel (වෙනත් ඉන්ධන)</option>
+                    <option value="parts">Parts (කොටස්)</option>
+                    <option value="other">Other Items (වෙනත් බඩු)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="font-bold text-neutral-700 block mb-1">
+                    Unit (මිනුම් ඒකකය)
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. 1L, Can, Set, Item"
+                    value={addProductUnit}
+                    onChange={(e) => setAddProductUnit(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl border border-neutral-300 font-semibold focus:outline-none focus:border-emerald-600 text-xs text-neutral-900"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="font-bold text-neutral-700 block mb-1">
+                  Unit Price (Rs.) (ඒකක මිල)
+                </label>
+                <input
+                  type="number"
+                  required
+                  min="0"
+                  step="any"
+                  placeholder="0.00"
+                  value={addProductPrice}
+                  onChange={(e) => setAddProductPrice(e.target.value)}
+                  className="w-full px-3 py-2.5 rounded-xl border border-neutral-300 font-black text-lg text-neutral-900 focus:outline-none focus:border-emerald-600"
+                />
+              </div>
+
+              <div className="flex gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowAddProduct(false)}
+                  className="flex-1 py-2.5 rounded-xl border border-neutral-300 font-bold text-neutral-700"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 py-2.5 rounded-xl bg-emerald-700 hover:bg-emerald-800 font-black text-white"
+                >
+                  Add Product
                 </button>
               </div>
             </form>
@@ -452,21 +876,21 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ initialSection = 'pr
             <form onSubmit={handleCreateLorry} className="space-y-3 text-xs">
               <div>
                 <label className="font-bold text-neutral-700 block mb-1">
-                  Lorry Name / Nickname
+                  Lorry Name / Nickname (ලොරි නම / හඳුන්වන නම)
                 </label>
                 <input
                   type="text"
                   required
-                  placeholder="e.g. Lorry 04 / White Dimo"
+                  placeholder="e.g. LN සුපුන් / Lorry 04"
                   value={lorryName}
                   onChange={(e) => setLorryName(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl border border-neutral-300 font-semibold focus:outline-none focus:border-emerald-600 text-sm"
+                  className="w-full px-3 py-2 rounded-xl border border-neutral-300 font-semibold focus:outline-none focus:border-emerald-600 text-sm text-neutral-900"
                 />
               </div>
 
               <div>
                 <label className="font-bold text-neutral-700 block mb-1">
-                  Registration Number Plate
+                  Registration Number Plate (ලියාපදිංචි අංකය)
                 </label>
                 <input
                   type="text"
@@ -474,8 +898,37 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ initialSection = 'pr
                   placeholder="e.g. WP ND-4489"
                   value={lorryPlate}
                   onChange={(e) => setLorryPlate(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl border border-neutral-300 font-mono font-bold focus:outline-none focus:border-emerald-600 text-sm"
+                  className="w-full px-3 py-2 rounded-xl border border-neutral-300 font-mono font-bold focus:outline-none focus:border-emerald-600 text-sm text-neutral-900"
                 />
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="font-bold text-neutral-700 block mb-1">
+                    Driver Name (රියදුරු නම)
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Optional"
+                    value={lorryDriver}
+                    onChange={(e) => setLorryDriver(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl border border-neutral-300 font-semibold focus:outline-none focus:border-emerald-600 text-xs text-neutral-900"
+                  />
+                </div>
+
+                <div>
+                  <label className="font-bold text-neutral-700 block mb-1">
+                    Capacity (ධාරිතාව)
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. 3 Cube / 4 Cube"
+                    value={lorryCapacity}
+                    onChange={(e) => setLorryCapacity(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl border border-neutral-300 font-semibold focus:outline-none focus:border-emerald-600 text-xs text-neutral-900"
+                  />
+                </div>
               </div>
 
               <div className="flex gap-2 pt-2">
@@ -491,6 +944,118 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ initialSection = 'pr
                   className="flex-1 py-2.5 rounded-xl bg-emerald-700 hover:bg-emerald-800 font-black text-white"
                 >
                   Save Lorry
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* EDIT LORRY MODAL */}
+      {editingLorry && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4 backdrop-blur-xs">
+          <div className="bg-white rounded-3xl max-w-sm w-full p-5 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-neutral-100 pb-2">
+              <h3 className="font-black text-base text-neutral-900">
+                Edit Lorry (ලොරි සංශෝධනය)
+              </h3>
+              <button
+                type="button"
+                onClick={() => setEditingLorry(null)}
+                className="p-1 text-neutral-400"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveLorry} className="space-y-3 text-xs">
+              <div>
+                <label className="font-bold text-neutral-700 block mb-1">
+                  Lorry Name / Nickname (ලොරි නම / හඳුන්වන නම)
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={editLorryName}
+                  onChange={(e) => setEditLorryName(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl border border-neutral-300 font-semibold focus:outline-none focus:border-emerald-600 text-sm text-neutral-900"
+                />
+              </div>
+
+              <div>
+                <label className="font-bold text-neutral-700 block mb-1">
+                  Registration Number Plate (ලියාපදිංචි අංකය)
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={editLorryPlate}
+                  onChange={(e) => setEditLorryPlate(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl border border-neutral-300 font-mono font-bold focus:outline-none focus:border-emerald-600 text-sm text-neutral-900"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="font-bold text-neutral-700 block mb-1">
+                    Driver Name (රියදුරු නම)
+                  </label>
+                  <input
+                    type="text"
+                    value={editLorryDriver}
+                    onChange={(e) => setEditLorryDriver(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl border border-neutral-300 font-semibold focus:outline-none focus:border-emerald-600 text-xs text-neutral-900"
+                  />
+                </div>
+
+                <div>
+                  <label className="font-bold text-neutral-700 block mb-1">
+                    Capacity (ධාරිතාව)
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={editLorryCapacity}
+                    onChange={(e) => setEditLorryCapacity(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl border border-neutral-300 font-semibold focus:outline-none focus:border-emerald-600 text-xs text-neutral-900"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="font-bold text-neutral-700 block mb-1">
+                  Notes (සටහන්)
+                </label>
+                <textarea
+                  value={editLorryNotes}
+                  onChange={(e) => setEditLorryNotes(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl border border-neutral-300 font-semibold focus:outline-none focus:border-emerald-600 text-xs text-neutral-900"
+                  rows={2}
+                  placeholder="Notes..."
+                />
+              </div>
+
+              <div className="flex gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => handleDeleteLorry(editingLorry.id)}
+                  className="px-3.5 rounded-xl border border-rose-200 text-rose-600 hover:bg-rose-50 font-bold flex items-center justify-center transition"
+                  title="Delete Lorry"
+                >
+                  <Trash2 size={16} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setEditingLorry(null)}
+                  className="flex-1 py-2.5 rounded-xl border border-neutral-300 font-bold text-neutral-700"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 py-2.5 rounded-xl bg-emerald-700 hover:bg-emerald-800 font-black text-white"
+                >
+                  Save Changes
                 </button>
               </div>
             </form>
