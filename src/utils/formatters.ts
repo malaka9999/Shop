@@ -15,6 +15,38 @@ export function getTodayDateString(): string {
   return `${year}-${month}-${day}`;
 }
 
+export function getPreviousDateString(dateStr: string): string {
+  const parts = dateStr.split('-');
+  if (parts.length !== 3) return dateStr;
+  const year = parseInt(parts[0], 10);
+  const month = parseInt(parts[1], 10) - 1;
+  const day = parseInt(parts[2], 10);
+  
+  const d = new Date(year, month, day);
+  d.setDate(d.getDate() - 1);
+  
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const dayStr = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${dayStr}`;
+}
+
+export function getNextDateString(dateStr: string): string {
+  const parts = dateStr.split('-');
+  if (parts.length !== 3) return dateStr;
+  const year = parseInt(parts[0], 10);
+  const month = parseInt(parts[1], 10) - 1;
+  const day = parseInt(parts[2], 10);
+  
+  const d = new Date(year, month, day);
+  d.setDate(d.getDate() + 1);
+  
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const dayStr = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${dayStr}`;
+}
+
 export function getCurrentTimeString(): string {
   const now = new Date();
   let hours = now.getHours();

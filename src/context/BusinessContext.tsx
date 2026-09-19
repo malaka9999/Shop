@@ -22,7 +22,7 @@ import {
   INITIAL_CUSTOMERS,
   DEFAULT_EXPENSE_CATEGORIES,
 } from '../data/initialData';
-import { getTodayDateString, getCurrentTimeString, formatRs, formatDateShort } from '../utils/formatters';
+import { getTodayDateString, getCurrentTimeString, formatRs, formatDateShort, getPreviousDateString, getNextDateString } from '../utils/formatters';
 import {
   FS_COLLECTIONS,
   SyncStatus,
@@ -165,6 +165,7 @@ interface BusinessContextType {
 
   // WhatsApp Messages
   generateDailyWhatsAppSummary: (date?: string) => string;
+  generateFullDailyWhatsAppSummary: (date?: string) => string;
   generateLorryWhatsAppSummary: (date?: string) => string;
   generateCustomerWhatsAppStatement: (customerId: string, date?: string) => string;
 
@@ -623,6 +624,83 @@ export const BusinessProvider: React.FC<{ children: ReactNode }> = ({ children }
       unsubCashDays?.();
     };
   }, []);
+
+  // Auto transfer cash logic (Kalin dawase ithiri mudal auto transfer)
+  useEffect(() => {
+    // Wait until Firestore initial load completes to avoid overwriting with empty states
+    if (firebaseSyncStatus === 'connecting') {
+      return;
+    }
+
+    const runAutoTransferCheck = () => {
+      const todayStr = getTodayDateString();
+      const yesterdayStr = getPreviousDateString(todayStr);
+      const tomorrowStr = getNextDateString(todayStr);
+
+      const now = new Date();
+      const currentHour = now.getHours();
+
+      // 1. Sync TODAY's opening cash with YESTERDAY's closing cash (if not manually adjusted)
+      const yesterdaySummary = getSummaryForDate(yesterdayStr);
+      const yesterdayClosing = yesterdaySummary.closingCash;
+
+      const todayRecord = dailyCashRecords[todayStr];
+      const shouldUpdateToday = !todayRecord || (!todayRecord.isManualOpening && todayRecord.openingCash !== yesterdayClosing);
+
+      if (shouldUpdateToday) {
+        const rec = {
+          date: todayStr,
+          openingCash: yesterdayClosing,
+          isManualOpening: false,
+          manualAdjustmentReason: 'Auto carried forward from yesterday',
+        };
+        setDailyCashRecords((prev) => ({
+          ...prev,
+          [todayStr]: rec,
+        }));
+        fsSaveDoc(FS_COLLECTIONS.DAILY_CASH, todayStr, { id: todayStr, ...rec });
+      }
+
+      // 2. Auto-transfer TODAY's closing cash to TOMORROW's opening cash at 10:00 PM (hour >= 22)
+      if (currentHour >= 22) {
+        const todaySummary = getSummaryForDate(todayStr);
+        const todayClosing = todaySummary.closingCash;
+
+        const tomorrowRecord = dailyCashRecords[tomorrowStr];
+        const shouldUpdateTomorrow = !tomorrowRecord || (!tomorrowRecord.isManualOpening && tomorrowRecord.openingCash !== todayClosing);
+
+        if (shouldUpdateTomorrow) {
+          const rec = {
+            date: tomorrowStr,
+            openingCash: todayClosing,
+            isManualOpening: false,
+            manualAdjustmentReason: 'Auto carried forward at 10:00 PM',
+          };
+          setDailyCashRecords((prev) => ({
+            ...prev,
+            [tomorrowStr]: rec,
+          }));
+          fsSaveDoc(FS_COLLECTIONS.DAILY_CASH, tomorrowStr, { id: tomorrowStr, ...rec });
+        }
+      }
+    };
+
+    // Run once on load/change
+    runAutoTransferCheck();
+
+    // Run every 30 seconds to capture transitions and updates in real-time
+    const interval = setInterval(runAutoTransferCheck, 30000);
+    return () => clearInterval(interval);
+  }, [
+    dailyCashRecords,
+    lorryTrips,
+    shopSales,
+    creditTransactions,
+    expenses,
+    workerPayments,
+    cashTransfers,
+    firebaseSyncStatus,
+  ]);
 
   const syncAllToFirebase = async (): Promise<void> => {
     setFirebaseSyncStatus('connecting');
@@ -1448,15 +1526,164 @@ export const BusinessProvider: React.FC<{ children: ReactNode }> = ({ children }
 =========================================
 💰 මුළු ලැබීම් එකතුව: ${formatRs(s.totalInflow)}
 -----------------------------------------
-➖ වියදම් (සාමාන්‍ය): ${formatRs(s.totalExpenses)}
+➖ වියදම් (සාමාන්ය): ${formatRs(s.totalExpenses)}
 ➖ සේවක ගෙවීම්: ${formatRs(s.directWorkerPayments)}
 ➖ අයියාට දුන්න: ${formatRs(s.transfersToAiya)}
 =========================================
-✅ ලාච්චුවේ ඉතිරි (Closing): ${formatRs(s.closingCash)}
+✅ ලාච්චුවේ ඉතිරි (Closing): ${formatRs(s.closingCash)}`;
+  };
 
-🚛 ලොරි: ට්‍රිප් ${s.totalTripsCount} | ආදායම: ${formatRs(s.totalLorryIncome)}
-🏪 කඩේ: විකුණුම් ${s.totalShopSalesCount} | ${formatRs(s.totalShopSalesAmount)}
-💳 අද අලුත් ණය: ${formatRs(s.newCreditGiven)} | මුළු හිඟ ණය: ${formatRs(s.totalOutstandingCredit)}`;
+  const generateFullDailyWhatsAppSummary = (dateStr?: string): string => {
+    const targetDate = dateStr || selectedDate;
+    const s = getSummaryForDate(targetDate);
+    const dateFormatted = formatDateShort(targetDate);
+
+    // 1. Core Summary (same as Short Summary)
+    let msg = `📅 දෛනික මුදල් සාරාංශය (${dateFormatted})
+-----------------------------------------
+💵 ලාච්චුව (Opening): ${formatRs(s.openingCash)}
+➕ අයියා දුන්න: ${formatRs(s.cashFromAiya)}
+➕ ලොරි වලින්: ${formatRs(s.totalLorryCash)}
+➕ කඩෙන්: ${formatRs(s.shopCashSales)}
+➕ ණය ලැබීම්: ${formatRs(s.creditPaymentsReceived)}
+=========================================
+💰 මුළු ලැබීම් එකතුව: ${formatRs(s.totalInflow)}
+-----------------------------------------
+➖ වියදම් (සාමාන්ය): ${formatRs(s.totalExpenses)}
+➖ සේවක ගෙවීම්: ${formatRs(s.directWorkerPayments)}
+➖ අයියාට දුන්න: ${formatRs(s.transfersToAiya)}
+=========================================
+✅ ලාච්චුවේ ඉතිරි (Closing): ${formatRs(s.closingCash)}`;
+
+    // 2. Lorry Trips Details
+    const dayTrips = lorryTrips.filter((t) => t.date === targetDate);
+    msg += `\n\n🚛 ලොරි ට්‍රිප් විස්තරය (Lorry Trips)\n-----------------------------------------`;
+    if (dayTrips.length === 0) {
+      msg += `\nට්‍රිප් ගොස් නොමැත (No trips).`;
+    } else {
+      // Group by lorryName
+      const groupedTrips: Record<string, { materialCounts: Record<string, number>; notes: string[] }> = {};
+      dayTrips.forEach((t) => {
+        const name = t.lorryName;
+        if (!groupedTrips[name]) {
+          groupedTrips[name] = { materialCounts: {}, notes: [] };
+        }
+        const mat = t.tripType || 'අනෙකුත්';
+        groupedTrips[name].materialCounts[mat] = (groupedTrips[name].materialCounts[mat] || 0) + 1;
+        if (t.notes && t.notes.trim()) {
+          groupedTrips[name].notes.push(t.notes.trim());
+        }
+      });
+
+      Object.entries(groupedTrips).forEach(([lorryName, data]) => {
+        msg += `\n${lorryName}`;
+        Object.entries(data.materialCounts).forEach(([material, count]) => {
+          msg += `\n    ${material} - ${count}`;
+        });
+        if (data.notes.length > 0) {
+          msg += `\n    📝 සටහන්: ${data.notes.join(', ')}`;
+        }
+      });
+    }
+
+    // 3. Shop Sales Details
+    const daySales = shopSales.filter((s) => s.date === targetDate);
+    msg += `\n\n🏪 කඩේ විකුණුම් (Shop Sales)\n-----------------------------------------`;
+    
+    let petrolLiters = 0;
+    let dieselLiters = 0;
+    let oilQty = 0;
+    const otherSales: string[] = [];
+
+    daySales.forEach((sale) => {
+      const pNameLower = sale.productName.toLowerCase();
+      if (sale.category === 'fuel') {
+        if (pNameLower.includes('petrol') || pNameLower.includes('පෙට්‍රල්')) {
+          petrolLiters += sale.quantity;
+        } else {
+          dieselLiters += sale.quantity;
+        }
+      } else if (sale.category === 'oil') {
+        oilQty += sale.quantity;
+      } else {
+        const noteStr = sale.notes ? ` (${sale.notes})` : '';
+        otherSales.push(`${sale.productName} - ${sale.quantity} pcs (Rs. ${sale.totalAmount.toLocaleString()})${noteStr}`);
+      }
+    });
+
+    msg += `\n⛽ පෙට්‍රල් (Petrol): ${petrolLiters} L`;
+    msg += `\n⛽ ඩීසල් (Diesel): ${dieselLiters} L`;
+    msg += `\n🛢️ ඔයිල් / තෙල් (Oil): ${oilQty} L/Pcs`;
+    
+    if (otherSales.length > 0) {
+      msg += `\n📦 අනෙකුත් විකුණුම් (Other items):`;
+      otherSales.forEach((os) => {
+        msg += `\n    • ${os}`;
+      });
+    }
+
+    // 4. Worker Payments
+    const dayWorkerPmts = workerPayments.filter((wp) => wp.date === targetDate);
+    msg += `\n\n👷 සල්ලි ගත්ත සේවකයෝ (Worker Payments)\n-----------------------------------------`;
+    if (dayWorkerPmts.length === 0) {
+      msg += `\nමුදල් ලබාගෙන නොමැත (No payments).`;
+    } else {
+      dayWorkerPmts.forEach((wp) => {
+        const noteStr = wp.note ? ` (${wp.note})` : '';
+        msg += `\n• ${wp.workerName} - Rs. ${wp.amount.toLocaleString()}${noteStr}`;
+      });
+    }
+
+    // 5. Credit Sales and Payments Received
+    const dayCreditTxs = creditTransactions.filter((tx) => tx.date === targetDate);
+    const creditSales = dayCreditTxs.filter((tx) => tx.type === 'CREDIT_SALE');
+    const creditReceipts = dayCreditTxs.filter((tx) => tx.type === 'PAYMENT_RECEIVED');
+
+    msg += `\n\n💳 ණයට ගත් අය සහ විස්තර (Credit Given Today)\n-----------------------------------------`;
+    if (creditSales.length === 0) {
+      msg += `\nඅද ණයට දී නොමැත (No credit sales).`;
+    } else {
+      creditSales.forEach((tx) => {
+        let details = '';
+        if (tx.source === 'LORRY') {
+          const trip = dayTrips.find((t) => t.id === tx.sourceReferenceId || t.customerId === tx.customerId);
+          if (trip) {
+            details = ` (ලොරියෙන්: ${trip.tripType}${trip.quantity ? ` ${trip.quantity}ft` : ''})`;
+          } else {
+            details = ` (ලොරි ණය)`;
+          }
+        } else if (tx.source === 'SHOP') {
+          const sale = daySales.find((s) => s.id === tx.sourceReferenceId || s.customerId === tx.customerId);
+          if (sale) {
+            details = ` (කඩෙන්: ${sale.productName} ${sale.quantity} L/Pcs)`;
+          } else {
+            details = ` (කඩේ ණය)`;
+          }
+        }
+        const noteStr = tx.notes ? ` [සටහන: ${tx.notes}]` : '';
+        msg += `\n• ${tx.customerName} - Rs. ${tx.amount.toLocaleString()}${details}${noteStr}`;
+      });
+    }
+
+    if (creditReceipts.length > 0) {
+      msg += `\n\n💵 ණය ලැබීම් (Credit Collections)\n-----------------------------------------`;
+      creditReceipts.forEach((tx) => {
+        const noteStr = tx.notes ? ` [සටහන: ${tx.notes}]` : '';
+        msg += `\n• ${tx.customerName} - Rs. ${tx.amount.toLocaleString()}${noteStr}`;
+      });
+    }
+
+    // 6. Expenses Breakdown
+    const dayExpenses = expenses.filter((e) => e.date === targetDate);
+    if (dayExpenses.length > 0) {
+      msg += `\n\n🧾 වියදම් විස්තරය (Expenses Breakdown)\n-----------------------------------------`;
+      dayExpenses.forEach((e) => {
+        const noteStr = e.note ? ` [සටහන: ${e.note}]` : '';
+        msg += `\n• ${e.category} - Rs. ${e.amount.toLocaleString()}${noteStr}`;
+      });
+    }
+
+    return msg;
   };
 
   const generateLorryWhatsAppSummary = (dateStr?: string): string => {
@@ -1650,6 +1877,7 @@ export const BusinessProvider: React.FC<{ children: ReactNode }> = ({ children }
         updateOpeningCash,
 
         generateDailyWhatsAppSummary,
+        generateFullDailyWhatsAppSummary,
         generateLorryWhatsAppSummary,
         generateCustomerWhatsAppStatement,
 

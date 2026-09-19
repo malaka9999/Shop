@@ -14,6 +14,7 @@ import {
   Printer,
   ChevronRight,
 } from 'lucide-react';
+import { WhatsAppSummaryModal } from './WhatsAppSummaryModal';
 
 export const ReportsView: React.FC = () => {
   const {
@@ -29,6 +30,7 @@ export const ReportsView: React.FC = () => {
 
   const [dateFilter, setDateFilter] = useState<'today' | 'week' | 'month'>('today');
   const [copied, setCopied] = useState(false);
+  const [showWhatsAppModal, setShowWhatsAppModal] = useState(false);
 
   // Compute aggregate range stats if week or month selected
   const rangeStats = useMemo(() => {
@@ -79,12 +81,7 @@ export const ReportsView: React.FC = () => {
   }, [dateFilter, selectedDate, lorryTrips, shopSales, creditTransactions, expenses, workerPayments]);
 
   const handleShareWhatsApp = () => {
-    const text = generateDailyWhatsAppSummary(selectedDate);
-    const opened = shareToWhatsApp(text);
-    if (!opened) {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 3000);
-    }
+    setShowWhatsAppModal(true);
   };
 
   const handlePrint = () => {
@@ -388,6 +385,11 @@ export const ReportsView: React.FC = () => {
           </div>
         </div>
       ) : null}
+
+      <WhatsAppSummaryModal
+        isOpen={showWhatsAppModal}
+        onClose={() => setShowWhatsAppModal(false)}
+      />
     </div>
   );
 };

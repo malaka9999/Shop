@@ -16,6 +16,7 @@ import {
   X,
 } from 'lucide-react';
 import { ActiveTab, CashTransferType } from '../types';
+import { WhatsAppSummaryModal } from './WhatsAppSummaryModal';
 
 export interface HomeViewProps {
   onOpenQuickTrip?: () => void;
@@ -47,6 +48,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
     addCashTransfer,
   } = useBusiness();
   const [copied, setCopied] = useState(false);
+  const [showWhatsAppModal, setShowWhatsAppModal] = useState(false);
 
   // Quick Aiya Modal State
   const [showAiyaModal, setShowAiyaModal] = useState(false);
@@ -110,12 +112,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
   };
 
   const handleShareDailyWhatsApp = () => {
-    const text = generateDailyWhatsAppSummary(selectedDate);
-    const opened = shareToWhatsApp(text);
-    if (!opened) {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 3000);
-    }
+    setShowWhatsAppModal(true);
   };
 
   return (
@@ -664,6 +661,11 @@ export const HomeView: React.FC<HomeViewProps> = ({
           </div>
         </div>
       )}
+
+      <WhatsAppSummaryModal
+        isOpen={showWhatsAppModal}
+        onClose={() => setShowWhatsAppModal(false)}
+      />
     </div>
   );
 };
