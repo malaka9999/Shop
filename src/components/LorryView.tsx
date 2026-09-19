@@ -525,8 +525,8 @@ export const LorryView: React.FC = () => {
               <span className="text-xs font-black text-amber-400">
                 {currentStep === 1 && 'පියවර 1/4: ලොරිය තෝරන්න (Select Lorry)'}
                 {currentStep === 2 && 'පියවර 2/4: ද්‍රව්‍ය වර්ගය තෝරන්න (Select Material)'}
-                {currentStep === 3 && 'පියවර 3/4: ප්‍රමාණය සහ මිල (Quantity & Rate)'}
-                {currentStep === 4 && 'පියවර 4/4: මුදල් ගෙවීම (Payment Option)'}
+                {currentStep === 3 && 'පියවර 3/4: ප්‍රමාණය තෝරන්න (Select Quantity)'}
+                {currentStep === 4 && 'පියවර 4/4: මිල, සටහන සහ ගෙවීම් (Price, Note & Payment)'}
               </span>
               {currentStep > 1 && (
                 <button
@@ -758,7 +758,7 @@ export const LorryView: React.FC = () => {
           )}
 
           {/* ---------------------------------------------------- */}
-          {/* STEP 3: QUANTITY & AMOUNT (ප්‍රමාණය & මිල)          */}
+          {/* STEP 3: SELECT QUANTITY (ප්‍රමාණය තෝරන්න)             */}
           {/* ---------------------------------------------------- */}
           {currentStep === 3 && (
             <div className="bg-[#0b1329] border border-slate-800 rounded-3xl p-4 shadow-xl space-y-4">
@@ -778,248 +778,145 @@ export const LorryView: React.FC = () => {
                 </button>
               </div>
 
-              <div>
-                <h2 className="text-sm font-black text-white">3. ප්‍රමාණය, මුදල සහ සටහන (Quantity, Amount & Note)</h2>
-                <p className="text-[11px] text-slate-400">ප්‍රමාණය (Default 300 අඩි), මුදල (අවශ්‍ය නම් පමණක්) සහ සටහනක් ඇතුළත් කරන්න</p>
+              {/* Step Title & Mode Toggle Option */}
+              <div className="flex items-center justify-between gap-2 border-b border-slate-850 pb-2">
+                <div className="min-w-0">
+                  <h2 className="text-sm font-black text-white">3. ප්‍රමාණය තෝරන්න (Quantity)</h2>
+                  <p className="text-[11px] text-slate-400">නියමිත ප්‍රමාණයක් තෝරන්න හෝ ඇතුලත් කරන්න</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const newMode = calcMode === 'default300' ? 'unitRate' : 'default300';
+                    setCalcMode(newMode);
+                    if (newMode === 'unitRate') {
+                      setQuantity(1);
+                      setAmount(0);
+                      setUnitRate(0);
+                    } else {
+                      setQuantity(300);
+                      setAmount(0);
+                    }
+                  }}
+                  className="py-1.5 px-3 rounded-xl bg-slate-950 hover:bg-slate-900 border border-slate-800 text-amber-400 text-xs font-black flex items-center gap-1.5 active:scale-95 transition shrink-0"
+                >
+                  <Calculator size={13} />
+                  <span>{calcMode === 'default300' ? 'මිල × ප්‍රමාණය' : 'සාමාන්‍ය'}</span>
+                </button>
               </div>
 
-              {/* 1. QUANTITY SELECTOR (FIXED TO DEFAULT 300) */}
-              <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-3.5 space-y-2">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Layers size={16} className="text-amber-400" />
-                    <span className="text-xs font-bold text-amber-300">
-                      ප්‍රමාණය (Quantity in Feet / අඩි):
-                    </span>
+              {/* Standard Mode Content (Screenshot 1 Style, Simplified to only 300) */}
+              {calcMode === 'default300' ? (
+                <div className="space-y-4">
+                  {/* Big 300 Button */}
+                  <div className="flex justify-center py-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setQuantity(300);
+                        setAmount(0); // clear or keep 0 by default
+                        setCurrentStep(4);
+                      }}
+                      className="w-full sm:w-48 py-8 bg-amber-500 hover:bg-amber-400 active:scale-95 text-slate-950 rounded-2xl text-3xl font-black transition text-center shadow-lg shadow-amber-500/10 flex items-center justify-center border-2 border-amber-300"
+                    >
+                      300
+                    </button>
                   </div>
-                  <span className="px-2.5 py-1 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-400 text-xs font-black font-mono">
-                    300 අඩි (Default)
-                  </span>
-                </div>
-                <p className="text-[11px] text-slate-400 leading-tight">
-                  ප්‍රමාණය ස්වයංක්‍රීයව අඩි 300 ලෙස සකසා ඇත. (Quantity is set to 300 feet by default)
-                </p>
-              </div>
 
-              {/* 2. OPTIONAL AMOUNT ENTRY (කැමතිනම් පමණක්) */}
-              <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-3.5 space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <DollarSign size={16} className="text-emerald-400" />
-                    <div>
-                      <span className="text-xs font-bold text-emerald-300 block leading-tight">
-                        ගාණ / මුදල (Amount in Rs):
-                      </span>
-                      <span className="text-[10px] text-slate-400 font-normal">
-                        * ඇතුළත් කිරීම අනිවාර්ය නැත (කැමතිනම් පමණක්)
-                      </span>
-                    </div>
-                  </div>
-                  <span className={`text-xs font-black font-mono px-2 py-0.5 rounded-md ${
-                    amount > 0
-                      ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40'
-                      : 'bg-slate-800 text-slate-400 border border-slate-700'
-                  }`}>
-                    {amount > 0 ? `Rs. ${amount}` : 'මුදලක් නැත (රු. 0)'}
-                  </span>
-                </div>
+                  <p className="text-center text-[11px] text-slate-400 leading-snug">
+                    ඉහත බොත්තම තේරූ සැනින් ඊළඟ පියවරට යයි (Tap the 300 button to proceed instantly)
+                  </p>
 
-                {/* Mode toggle: Direct vs Unit Rate × 300 */}
-                <div className="flex bg-slate-950 p-1 rounded-xl border border-slate-800 text-[11px]">
-                  <button
-                    type="button"
-                    onClick={() => setCalcMode('default300')}
-                    className={`flex-1 py-1.5 rounded-lg font-bold text-center transition ${
-                      calcMode === 'default300'
-                        ? 'bg-slate-800 text-amber-300'
-                        : 'text-slate-400 hover:text-slate-200'
-                    }`}
-                  >
-                    Direct Amount (මුළු ගාණ)
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setCalcMode('unitRate')}
-                    className={`flex-1 py-1.5 rounded-lg font-bold text-center transition ${
-                      calcMode === 'unitRate'
-                        ? 'bg-slate-800 text-amber-300'
-                        : 'text-slate-400 hover:text-slate-200'
-                    }`}
-                  >
-                    Unit Price × 300 (ඒකක මිල × 300)
-                  </button>
-                </div>
-
-                {/* Direct Total Input */}
-                {calcMode === 'default300' ? (
-                  <div className="space-y-2.5">
-                    <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 text-center space-y-1">
-                      <label htmlFor="input-lorry-custom-amount" className="text-[11px] font-bold text-slate-300 block">
-                        මුදලක් තිබේ නම් ඇතුළත් කරන්න (Enter Amount if any):
-                      </label>
-                      <div className="flex items-center justify-center gap-2 max-w-xs mx-auto font-mono">
-                        <span className="text-xl font-black text-emerald-400">Rs.</span>
-                        <input
-                          id="input-lorry-custom-amount"
-                          type="number"
-                          min="0"
-                          step="50"
-                          value={amount === 0 ? '' : amount}
-                          onChange={(e) => setAmount(Number(e.target.value) || 0)}
-                          className="w-full px-4 py-2 bg-slate-900 border-2 border-slate-700 focus:border-emerald-400 rounded-xl text-2xl font-black text-white focus:outline-none focus:ring-2 focus:ring-emerald-400 text-center shadow-inner"
-                          placeholder="0"
-                        />
-                      </div>
-                    </div>
-
-                    {/* Preset Amount Pills + Clear / 0 Button */}
-                    <div>
-                      <span className="text-[10px] text-slate-400 font-semibold block mb-1.5 px-0.5">
-                        ඉක්මන් මුදල් ප්‍රමාණ (Quick Amount Presets):
-                      </span>
-                      <div className="grid grid-cols-4 gap-1.5">
-                        <button
-                          type="button"
-                          onClick={() => setAmount(0)}
-                          className={`py-1.5 px-2 rounded-xl text-xs font-black transition border ${
-                            amount === 0
-                              ? 'bg-slate-800 text-amber-300 border-amber-500/50 shadow'
-                              : 'bg-slate-950 hover:bg-slate-850 text-slate-400 border-slate-800'
-                          }`}
-                        >
-                          මුදලක් නැත (0)
-                        </button>
-                        {[250, 300, 500, 1000, 1500, 2000, 3000].map((preset) => (
-                          <button
-                            key={preset}
-                            type="button"
-                            onClick={() => handleSelectPresetAmount(preset)}
-                            className={`py-1.5 px-2 rounded-xl text-xs font-black transition border ${
-                              amount === preset
-                                ? 'bg-emerald-500 text-slate-950 border-emerald-400 shadow-md scale-[1.02]'
-                                : 'bg-slate-950 hover:bg-slate-800 text-slate-300 border-slate-800'
-                            }`}
-                          >
-                            Rs. {preset}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 text-center space-y-1">
-                      <label htmlFor="input-lorry-unit-rate" className="text-[11px] font-bold text-slate-300 block">
-                        ඒකක මිල ඇතුළත් කරන්න (Enter Unit Rate / Rate per foot):
-                      </label>
-                      <div className="flex items-center justify-center gap-2 max-w-xs mx-auto font-mono">
-                        <span className="text-lg font-black text-amber-400">Rs.</span>
-                        <input
-                          id="input-lorry-unit-rate"
-                          type="number"
-                          min="0"
-                          step="5"
-                          value={unitRate === 0 ? '' : unitRate}
-                          onChange={(e) => {
-                            const rate = Number(e.target.value) || 0;
-                            setUnitRate(rate);
-                            setAmount(Math.round(300 * rate));
-                          }}
-                          className="w-full px-4 py-2 bg-slate-900 border-2 border-slate-700 focus:border-amber-400 rounded-xl text-xl font-black text-white focus:outline-none focus:ring-2 focus:ring-amber-400 text-center shadow-inner"
-                          placeholder="e.g. 50"
-                        />
-                        <span className="text-xs font-bold text-slate-400 whitespace-nowrap">/ අඩියක්</span>
-                      </div>
-                    </div>
-
-                    {/* Calculated Outcome Display with Override Capability as explicitly requested */}
-                    <div className="bg-slate-950/60 p-3 rounded-xl border border-dashed border-slate-800 space-y-2">
-                      <div className="flex items-center justify-between text-xs px-1 leading-normal">
-                        <span className="text-slate-400 font-bold">ගණනය කල මුදල (Calculated):</span>
-                        <span className="text-amber-400 font-mono font-black text-xs">
-                          300 අඩි × Rs. {unitRate} = Rs. {300 * unitRate}
-                        </span>
-                      </div>
-                      
-                      <div className="space-y-1">
-                        <label htmlFor="input-lorry-calc-amount" className="text-[10px] font-bold text-slate-400 block text-center leading-normal">
-                          මුදල වෙනස් කිරීමට අවශ්‍ය නම් වෙනස් කරන්න (Override Amount if needed):
-                        </label>
-                        <div className="flex items-center justify-center gap-2 max-w-xs mx-auto font-mono">
-                          <span className="text-lg font-bold text-emerald-400">Rs.</span>
-                          <input
-                            id="input-lorry-calc-amount"
-                            type="number"
-                            min="0"
-                            step="50"
-                            value={amount === 0 ? '' : amount}
-                            onChange={(e) => setAmount(Number(e.target.value) || 0)}
-                            className="w-full px-3 py-1.5 bg-slate-900 border border-slate-700 focus:border-emerald-400 rounded-lg text-lg font-black text-white focus:outline-none text-center shadow-sm"
-                            placeholder={`${300 * unitRate}`}
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* 3. OPTIONAL TRIP NOTE (ට්‍රිප් එකට සටහනක්) */}
-              <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-3.5 space-y-2">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <FileText size={16} className="text-amber-400" />
-                    <label htmlFor="input-trip-note" className="text-xs font-bold text-amber-300">
-                      ට්‍රිප් එකට සටහනක් (Note - අවශ්‍ය නම් පමණක්):
+                  {/* Custom Quantity input below */}
+                  <div className="pt-3 border-t border-slate-850 space-y-2">
+                    <label htmlFor="input-custom-qty-step3" className="text-[11px] font-bold text-slate-400 block">
+                      වෙනත් ඕනෑම ප්‍රමාණයක් ටයිප් කිරීමට (Custom):
                     </label>
-                  </div>
-                  <span className="text-[10px] text-slate-400 bg-slate-800 px-2 py-0.5 rounded font-mono">
-                    Optional
-                  </span>
-                </div>
-                <input
-                  id="input-trip-note"
-                  type="text"
-                  value={tripNotes}
-                  onChange={(e) => setTripNotes(e.target.value)}
-                  placeholder="උදා: කඩවත සයිට් එකට, බාස් උන්නැහේට, පස් ලෝඩ් 1යි, ආදිය..."
-                  className="w-full px-3.5 py-2 bg-slate-950 border border-slate-700 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-amber-400"
-                />
-              </div>
-
-              {/* 4. TRIP OVERVIEW STRIP */}
-              <div className="bg-slate-950 p-3.5 rounded-2xl border border-slate-800 space-y-1 text-xs">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <span className="text-slate-400 block text-[10px]">සාරාංශය (Overview):</span>
-                    <span className="text-white font-black">
-                      {selectedMaterial} • ප්‍රමාණය: <span className="text-amber-400 font-mono">{quantity} අඩි</span>
-                    </span>
-                  </div>
-                  <div className="text-right">
-                    <span className="text-slate-400 block text-[10px]">නියමිත මුදල:</span>
-                    <span className={`font-black font-mono text-sm ${amount > 0 ? 'text-emerald-400' : 'text-slate-400'}`}>
-                      {amount > 0 ? `Rs. ${amount}` : 'මුදලක් නැත (රු. 0)'}
-                    </span>
+                    <div className="flex items-center gap-2">
+                      <div className="relative flex-1">
+                        <input
+                          id="input-custom-qty-step3"
+                          type="number"
+                          value={quantity || ''}
+                          onChange={(e) => setQuantity(Number(e.target.value) || 0)}
+                          placeholder="300"
+                          className="w-full py-2 px-3 bg-slate-950 border border-slate-800 focus:border-amber-500 rounded-xl text-lg font-black text-white text-center focus:outline-none"
+                        />
+                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-500 font-bold">අඩි</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (!quantity) setQuantity(300);
+                          setCurrentStep(4);
+                        }}
+                        className="py-2.5 px-4 bg-amber-500 hover:bg-amber-450 text-slate-950 rounded-xl text-xs font-black flex items-center gap-1 shrink-0"
+                      >
+                        <span>ඉදිරියට</span>
+                        <ArrowRight size={14} />
+                      </button>
+                    </div>
                   </div>
                 </div>
-                {tripNotes.trim() && (
-                  <div className="pt-1.5 border-t border-slate-900 flex items-center gap-1.5 text-amber-300/90 text-[11px]">
-                    <FileText size={12} className="text-amber-400 shrink-0" />
-                    <span className="truncate"><strong>Note:</strong> {tripNotes.trim()}</span>
+              ) : (
+                /* Unit Rate Calculation Mode Content (Screenshot 2 Style) */
+                <div className="bg-slate-900/40 p-3.5 rounded-2xl border border-slate-800 space-y-3.5">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label htmlFor="input-unit-rate-step3" className="text-[11px] font-bold text-slate-400 block mb-1">
+                        ඒකක මිල (Price Rs.)
+                      </label>
+                      <input
+                        id="input-unit-rate-step3"
+                        type="number"
+                        placeholder="e.g. 500"
+                        value={unitRate || ''}
+                        onChange={(e) => {
+                          const val = Number(e.target.value) || 0;
+                          setUnitRate(val);
+                          setAmount(val * quantity);
+                        }}
+                        className="w-full px-3 py-2 bg-slate-950 border border-slate-800 focus:border-amber-500 rounded-xl text-sm font-bold text-white text-center focus:outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label htmlFor="input-quantity-step3" className="text-[11px] font-bold text-slate-400 block mb-1">
+                        ප්‍රමාණය (Quantity)
+                      </label>
+                      <input
+                        id="input-quantity-step3"
+                        type="number"
+                        placeholder="1"
+                        value={quantity || ''}
+                        onChange={(e) => {
+                          const val = Number(e.target.value) || 0;
+                          setQuantity(val);
+                          setAmount(unitRate * val);
+                        }}
+                        className="w-full px-3 py-2 bg-slate-950 border border-slate-800 focus:border-amber-500 rounded-xl text-sm font-bold text-white text-center focus:outline-none"
+                      />
+                    </div>
                   </div>
-                )}
-              </div>
 
-              {/* Advance to Step 4 Button */}
-              <button
-                type="button"
-                onClick={() => setCurrentStep(4)}
-                className="w-full py-3.5 bg-amber-500 hover:bg-amber-400 text-slate-950 rounded-2xl text-sm font-black flex items-center justify-center gap-2 shadow-lg active:scale-98 transition"
-              >
-                <span>මුදල් ගෙවීම / තහවුරු කිරීමට යන්න (Next)</span>
-                <ArrowRight size={16} />
-              </button>
+                  {/* Calculated total display block */}
+                  <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 flex items-center justify-between text-xs">
+                    <span className="text-slate-400 font-bold">මුළු එකතුව (Total):</span>
+                    <span className="text-lg font-black text-amber-400 font-mono">Rs. {unitRate * quantity}</span>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAmount(unitRate * quantity);
+                      setCurrentStep(4);
+                    }}
+                    className="w-full py-3 bg-amber-500 hover:bg-amber-400 active:scale-95 text-slate-950 rounded-xl text-xs font-black flex items-center justify-center gap-1 shadow-lg transition"
+                  >
+                    <span>තහවුරු කර ඉදිරියට (Next)</span>
+                    <ArrowRight size={14} />
+                  </button>
+                </div>
+              )}
             </div>
           )}
 
