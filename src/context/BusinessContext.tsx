@@ -1575,8 +1575,8 @@ export const BusinessProvider: React.FC<{ children: ReactNode }> = ({ children }
         }
       });
 
-      Object.entries(groupedTrips).forEach(([lorryName, data]) => {
-        msg += `\n${lorryName}`;
+      Object.entries(groupedTrips).forEach(([lorryName, data], index) => {
+        msg += `${index > 0 ? '\n\n' : '\n'}${lorryName}`;
         Object.entries(data.materialCounts).forEach(([material, count]) => {
           msg += `\n    ${material} - ${count}`;
         });
