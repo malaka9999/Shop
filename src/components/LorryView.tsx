@@ -402,6 +402,25 @@ export const LorryView: React.FC = () => {
   // Current day's trips
   const currentDayTrips = lorryTrips.filter((t) => t.date === selectedDate);
 
+  // Group currentDayTrips by lorryId for grouped Sri Lankan records layout
+  const tripsByLorry = useMemo(() => {
+    const groups: Record<string, { lorryId: string; lorryName: string; trips: LorryTrip[] }> = {};
+    currentDayTrips.forEach((trip) => {
+      const lid = trip.lorryId;
+      if (!groups[lid]) {
+        groups[lid] = { lorryId: lid, lorryName: trip.lorryName, trips: [] };
+      }
+      groups[lid].trips.push(trip);
+    });
+
+    // Sort trips inside each group by time or createdTimestamp
+    Object.values(groups).forEach((g) => {
+      g.trips.sort((a, b) => (a.createdTimestamp || 0) - (b.createdTimestamp || 0));
+    });
+
+    return Object.values(groups);
+  }, [currentDayTrips]);
+
   return (
     <div className="space-y-3 pb-24 font-sans select-none text-slate-100">
       {/* 1. TOP HEADER - LORRY MANAGER (Matching Screenshot) */}
@@ -1244,39 +1263,67 @@ export const LorryView: React.FC = () => {
             </h3>
 
             <div className="space-y-2">
-              {todaySummary.lorryBreakdown.map((item) => (
-                <div
-                  key={item.lorryId}
-                  className="bg-[#0b1329] p-3.5 rounded-2xl border border-slate-800 space-y-2"
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <Truck size={16} className="text-amber-400" />
-                      <span className="font-black text-white text-sm">{item.lorryName}</span>
-                    </div>
-                    <span className="text-xs font-bold px-2 py-0.5 rounded bg-slate-900 text-slate-300 border border-slate-800">
-                      {item.tripsCount} ට්‍රිප්
-                    </span>
-                  </div>
+              {todaySummary.lorryBreakdown.map((item) => {
+                const lorryTripsForToday = currentDayTrips.filter((t) => t.lorryId === item.lorryId);
+                
+                // Group by material
+                const materialCounts: Record<string, number> = {};
+                lorryTripsForToday.forEach((t) => {
+                  const mat = t.material || t.tripType || 'පස්';
+                  materialCounts[mat] = (materialCounts[mat] || 0) + 1;
+                });
 
-                  <div className="grid grid-cols-3 gap-1.5 text-center text-xs">
-                    <div className="bg-slate-900 p-2 rounded-xl">
-                      <span className="text-[10px] text-slate-500 block">Total</span>
-                      <span className="font-black text-white">{formatRs(item.totalIncome)}</span>
+                const materialsList = Object.entries(materialCounts);
+
+                // Calculate total amount for non-Aiya trips
+                const nonAiyaTotal = lorryTripsForToday
+                  .filter((t) => t.paymentType !== 'AIYA')
+                  .reduce((sum, t) => sum + (t.totalAmount || 0), 0);
+
+                return (
+                  <div
+                    key={item.lorryId}
+                    className="bg-[#0b1329] p-4 rounded-3xl border border-slate-800 flex items-center justify-between shadow-md"
+                  >
+                    <div className="space-y-1.5">
+                      {/* Lorry Name */}
+                      <div className="flex items-center gap-2">
+                        <Truck size={16} className="text-amber-500 shrink-0" />
+                        <span className="font-black text-white text-sm">{item.lorryName}</span>
+                        <span className="text-[10px] text-slate-500 font-bold">
+                          ({item.tripsCount} trips)
+                        </span>
+                      </div>
+
+                      {/* Materials List */}
+                      {materialsList.length > 0 ? (
+                        <div className="space-y-1 pl-6 pt-0.5">
+                          {materialsList.map(([mat, count]) => (
+                            <div key={mat} className="flex items-center gap-1.5 text-xs text-slate-300 font-bold">
+                              <span className="px-2 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20 text-[10px] tracking-wide">
+                                {mat}
+                              </span>
+                              <span className="text-white font-mono">{count}</span>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <span className="text-xs text-slate-500 pl-6 block">ට්‍රිප් නැත (No Trips)</span>
+                      )}
                     </div>
-                    <div className="bg-slate-900 p-2 rounded-xl">
-                      <span className="text-[10px] text-amber-500 block">Driver</span>
-                      <span className="font-black text-amber-400">{formatRs(item.driverPayment)}</span>
-                    </div>
-                    <div className="bg-slate-900 p-2 rounded-xl border border-emerald-950">
-                      <span className="text-[10px] text-emerald-500 block">Cash</span>
-                      <span className="font-black text-emerald-400">
-                        {formatRs(item.totalIncome - item.driverPayment - item.credit)}
-                      </span>
-                    </div>
+
+                    {/* Total Money "මුදල් <amount>" (Show only if non-Aiya trips total > 0) */}
+                    {nonAiyaTotal > 0 && (
+                      <div className="text-right pl-4">
+                        <span className="text-slate-400 text-[10px] font-black block uppercase tracking-wide">මුදල්</span>
+                        <span className="text-base font-black text-emerald-400 font-mono">
+                          Rs. {nonAiyaTotal.toLocaleString()}
+                        </span>
+                      </div>
+                    )}
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         </div>
@@ -1307,115 +1354,150 @@ export const LorryView: React.FC = () => {
               </button>
             </div>
           ) : (
-            <div className="space-y-2">
-              {currentDayTrips.map((trip) => (
-                <div
-                  key={trip.id}
-                  className="bg-[#0b1329] border border-slate-800 rounded-2xl p-3.5 space-y-2 shadow-sm"
-                >
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-black text-sm text-white">{trip.lorryName}</span>
-                        <span className="text-xs font-bold px-2 py-0.5 rounded-md bg-amber-500/10 text-amber-400 border border-amber-500/30">
-                          {trip.material || trip.tripType}
-                        </span>
-                        {trip.quantity ? (
-                          <span className="text-xs font-bold px-2 py-0.5 rounded-md bg-slate-800 text-amber-300 border border-slate-700 font-mono">
-                            ප්‍රමාණය: {trip.quantity} අඩි
-                          </span>
-                        ) : null}
+            <div className="space-y-3">
+              {tripsByLorry.map((group) => {
+                const nonAiyaTotal = group.trips
+                  .filter((t) => t.paymentType !== 'AIYA')
+                  .reduce((sum, t) => sum + (t.totalAmount || 0), 0);
+
+                return (
+                  <div key={group.lorryId} className="bg-[#0b1329] border border-slate-800 rounded-3xl p-4 shadow-xl space-y-3">
+                    {/* Lorry Name Header */}
+                    <div className="flex items-center justify-between border-b border-slate-850 pb-2">
+                      <div className="flex items-center gap-2">
+                        <Truck size={17} className="text-amber-500 shrink-0" />
+                        <span className="font-black text-sm text-white tracking-wide">{group.lorryName}</span>
                       </div>
-                      <span className="text-[11px] text-slate-500 flex items-center gap-1 mt-0.5">
-                        <Clock size={11} />
-                        {trip.time}
-                        {trip.customerName && ` • Customer: ${trip.customerName}`}
-                      </span>
-                      {trip.notes && (
-                        <div className="mt-1 bg-slate-950/80 rounded-lg px-2 py-1 border border-slate-800 flex items-start gap-1.5 text-[11px] text-amber-200">
-                          <FileText size={12} className="text-amber-400 mt-0.5 shrink-0" />
-                          <span><strong className="text-slate-400 font-medium">Note:</strong> {trip.notes}</span>
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="text-right">
-                      {trip.paymentType === 'AIYA' ? (
-                        <span className="text-xs font-black text-amber-400 block font-mono">
-                          අයියාට (රු. 0)
-                        </span>
-                      ) : (
-                        <span className="text-base font-black text-amber-400 font-mono block">
-                          {formatRs(trip.totalAmount)}
-                        </span>
-                      )}
-                      <span
-                        className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
-                          trip.paymentType === 'FULL'
-                            ? 'bg-emerald-950 text-emerald-300 border border-emerald-800'
-                            : trip.paymentType === 'AIYA'
-                            ? 'bg-amber-950 text-amber-300 border border-amber-800'
-                            : 'bg-rose-950 text-rose-300 border border-rose-800'
-                        }`}
-                      >
-                        {trip.paymentType === 'FULL'
-                          ? 'සම්පූර්ණ මුදල'
-                          : trip.paymentType === 'AIYA'
-                          ? 'අයියාට මුදල්'
-                          : 'ණයට'}
+                      <span className="text-[10px] font-black px-2 py-0.5 rounded-lg bg-slate-900 text-slate-400 border border-slate-800">
+                        {group.trips.length} ට්‍රිප් (Trips)
                       </span>
                     </div>
-                  </div>
 
-                  {/* Actions: Edit & Delete */}
-                  <div className="flex items-center justify-between pt-1.5 border-t border-slate-800/60">
-                    <button
-                      type="button"
-                      onClick={() => handleOpenEditTripModal(trip)}
-                      className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-amber-400 text-xs font-bold transition active:scale-95 border border-slate-800"
-                      title="Edit Trip (ට්‍රිප් විස්තර සංස්කරණය)"
-                    >
-                      <Pencil size={12} className="text-amber-400" />
-                      <span>Edit (වෙනස් කරන්න)</span>
-                    </button>
+                    {/* Trips Rows under this Lorry */}
+                    <div className="space-y-2">
+                      {group.trips.map((trip, idx) => {
+                        const isAiya = trip.paymentType === 'AIYA';
+                        return (
+                          <div key={trip.id} className="bg-slate-900/60 border border-slate-850 p-3 rounded-2xl space-y-2">
+                            <div className="flex items-start justify-between">
+                              <div>
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  {/* Format: [Material] [Sequential Number] */}
+                                  <span className="text-xs font-black text-white">{trip.material || trip.tripType}</span>
+                                  <span className="text-[10px] font-black px-1.5 py-0.2 rounded bg-amber-500/10 text-amber-400 border border-amber-500/25 font-mono">
+                                    {idx + 1}
+                                  </span>
+                                  {trip.quantity && trip.quantity !== 300 && (
+                                    <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-slate-800 text-amber-300 font-mono">
+                                      {trip.quantity} ft
+                                    </span>
+                                  )}
+                                </div>
+                                <span className="text-[11px] text-slate-500 flex items-center gap-1 mt-1">
+                                  <Clock size={11} />
+                                  {trip.time}
+                                  {trip.customerName && ` • Customer: ${trip.customerName}`}
+                                </span>
+                                {trip.notes && (
+                                  <div className="mt-1 bg-slate-950/80 rounded-lg px-2 py-1 border border-slate-800/60 flex items-start gap-1.5 text-[11px] text-amber-200">
+                                    <FileText size={12} className="text-amber-400 mt-0.5 shrink-0" />
+                                    <span><strong className="text-slate-400 font-medium">Note:</strong> {trip.notes}</span>
+                                  </div>
+                                )}
+                              </div>
 
-                    <div>
-                      {deletingTripId === trip.id ? (
-                        <div className="flex items-center gap-2">
-                          <span className="text-[11px] text-rose-400 font-bold">මකන්නද?</span>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              deleteLorryTrip(trip.id);
-                              setDeletingTripId(null);
-                            }}
-                            className="px-2.5 py-1 bg-rose-600 text-white rounded-lg text-xs font-black shadow"
-                          >
-                            ඔව්
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setDeletingTripId(null)}
-                            className="px-2 py-1 bg-slate-800 text-slate-300 rounded-lg text-xs"
-                          >
-                            නැත
-                          </button>
-                        </div>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => setDeletingTripId(trip.id)}
-                          className="text-slate-500 hover:text-rose-400 p-1 rounded-lg flex items-center gap-1 text-xs transition"
-                          title="Delete Trip"
-                        >
-                          <Trash2 size={13} />
-                          <span className="text-[11px]">මකන්න</span>
-                        </button>
-                      )}
+                              <div className="text-right">
+                                {isAiya ? (
+                                  <span className="text-xs font-black text-slate-500 block font-mono">
+                                    අයියාට (රු. 0)
+                                  </span>
+                                ) : (
+                                  <span className="text-sm font-black text-amber-400 font-mono block">
+                                    Rs. {trip.totalAmount.toLocaleString()}
+                                  </span>
+                                )}
+                                <span
+                                  className={`text-[9px] font-bold px-1.5 py-0.2 rounded block w-fit ml-auto mt-1 ${
+                                    trip.paymentType === 'FULL'
+                                      ? 'bg-emerald-950 text-emerald-300 border border-emerald-900/60'
+                                      : trip.paymentType === 'AIYA'
+                                      ? 'bg-slate-950 text-slate-400 border border-slate-800'
+                                      : 'bg-rose-950 text-rose-300 border border-rose-900/60'
+                                  }`}
+                                >
+                                  {trip.paymentType === 'FULL'
+                                    ? 'සම්පූර්ණ මුදල'
+                                    : trip.paymentType === 'AIYA'
+                                    ? 'අයියාට මුදල්'
+                                    : 'ණයට'}
+                                </span>
+                              </div>
+                            </div>
+
+                            {/* Row Actions: Edit & Delete */}
+                            <div className="flex items-center justify-between pt-1.5 border-t border-slate-850">
+                              <button
+                                type="button"
+                                onClick={() => handleOpenEditTripModal(trip)}
+                                className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-amber-400 text-[10px] font-black transition active:scale-95 border border-slate-800/80"
+                                title="Edit Trip"
+                              >
+                                <Pencil size={11} className="text-amber-400" />
+                                <span>Edit (වෙනස් කරන්න)</span>
+                              </button>
+
+                              <div>
+                                {deletingTripId === trip.id ? (
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="text-[10px] text-rose-400 font-bold">මකන්නද?</span>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        deleteLorryTrip(trip.id);
+                                        setDeletingTripId(null);
+                                      }}
+                                      className="px-2 py-0.5 bg-rose-600 text-white rounded text-[10px] font-black shadow"
+                                    >
+                                      ඔව්
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => setDeletingTripId(null)}
+                                      className="px-1.5 py-0.5 bg-slate-800 text-slate-300 rounded text-[10px]"
+                                    >
+                                      නැත
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    onClick={() => setDeletingTripId(trip.id)}
+                                    className="text-slate-500 hover:text-rose-400 p-0.5 rounded flex items-center gap-0.5 text-[10px] transition"
+                                    title="Delete Trip"
+                                  >
+                                    <Trash2 size={11} />
+                                    <span>මකන්න</span>
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
+
+                    {/* Group Total Money (Excluded Aiyata trips) */}
+                    {nonAiyaTotal > 0 && (
+                      <div className="flex items-center justify-between pt-2 border-t border-slate-850 px-1 bg-slate-900/30 rounded-xl p-2 border border-slate-850/40">
+                        <span className="text-slate-400 text-xs font-black">මුදල් එකතුව (Total Amount)</span>
+                        <span className="text-sm font-black text-emerald-400 font-mono">
+                          Rs. {nonAiyaTotal.toLocaleString()}
+                        </span>
+                      </div>
+                    )}
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
